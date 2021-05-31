@@ -1,0 +1,70 @@
+
+Final figures for thesis:
+
+
+
+**Methodology figures**
+
+- [ ] Process
+- [x] Example of the data during processing step
+
+
+
+**Results figures**
+
+Gene expression analysis
+- [x] Balanced accuracy for combination therapy classification
+- [x] Balanced accuracy for monotherapy classification
+= [ ] Hotelling's permutation t-test for combination therapy
+- [ ] Hotelling's permutation t-test for monotherapy
+
+- [ ] Univariate boxplots
+
+Naive classification
+- [x] Heatmap for combination therapy (no section)
+- [x] Heatmap for monotherapy (no section)
+
+- [x] Overall balanced accuracy for combination therapy classification (no section)
+- [x] Overall accuracy for monotherapy classification (no section)
+
+- [x] Hotelling's permutation t-test for combination therapy (no section)
+- [x] Hotelling's permutation t-test for monotherapy (no section)
+
+- [x] Univariate histograms [appendix] --> maybe remove
+- [x] Univariate boxplots
+
+- [ ] Summary table showing all of this information
+
+Classification using spatial information
+- [ ] Heatmaps by section [appendix]
+- [x] Overall balanced accuracy for combination therapy classification (by section)
+- [x] Hotelling's permutation t-test for combination therapy (by section)
+
+- [ ] Heatmaps by section [appendix]
+- [x] Overall accruacy for monotherapy classification (by section)
+- [x] Hotelling's permutation t-test for monotherapy (by section)
+
+- [x] Any univariate tests from significant multivariate test
+
+- [ ] Summary table showing all of this information
+
+Spicy
+- [ ] Heatmap of p-values for celltype associations for combination therapy --> maybe don't need
+- [ ] Heatmap of p-values for celltype associations for monotherapy --> maybe don't need
+
+- [x] Classification models for combination therapy classification (by section)
+- [ ] Hotelling's permutation t-test for combination therapy (by section)
+
+- [x] Classification models for monotherapy classification (by section)
+- [ ] Hotelling's permutation t-test formonotherapy (by section)
+
+
+
+
+
+
+comb core dist
+comb margin
+comb 
+
+feature selection

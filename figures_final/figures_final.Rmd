@@ -1,0 +1,2014 @@
+---
+title: "figures_final"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse) # for general handling
+
+library(ggplot2) # for plotting
+library(ComplexHeatmap) # for heatmaps
+
+library(limma) # for gene expression
+library(edgeR) # for gene expression
+
+library(caret) # for fitting models
+# library(class) # for knn
+library(e1071) # for svm
+library(randomForest) # for randomforest
+library(janitor) # for cleaning names for randomforest
+library(xgboost) # for xgboost
+
+library(Hotelling) # for testing
+```
+
+```{r reading relevant rdata}
+
+# Methodology -  Example of the data during processing step
+# Full sectioned data containing oldID, newID, label, cellType 
+barcode_dat_section = readRDS("../full_data/rdata/barcode_dat_section.rds")
+barcode_dat_section_dist = readRDS("../full_data/rdata/barcode_dat_section_dist.rds")
+
+# Results - naive data
+# Unsectioned proportion information
+barcodeprop_comb = readRDS("../full_data/rdata/barcodeprop_comb.rds")
+barcodeprop_mono = readRDS("../full_data/rdata/barcodeprop_mono.rds")
+
+# Results - naive hotellings
+# Results from hotelling's permutation t-test
+load("../full_data/rdata/comb_multivariate.Rdata")
+load("../full_data/rdata/mono_multivariate.Rdata")
+
+# Results - spatial data
+# Sectioned proportion information
+sectionprop_comb = readRDS("../full_data/rdata/sectionprop_comb.rds")
+sectionprop_mono = readRDS("../full_data/rdata/sectionprop_mono.rds")
+sectionprop_comb_dist = readRDS("../full_data/rdata/sectionprop_comb_dist.rds")
+sectionprop_mono_dist = readRDS("../full_data/rdata/sectionprop_mono_dist.rds")
+
+# Results - spatial hotellings
+# Results from hotelling's permutation t-test
+load("../full_data/rdata/comb_core_multivariate.Rdata")
+load("../full_data/rdata/comb_core_multivariate_dist.Rdata")
+load("../full_data/rdata/comb_edge_multivariate.Rdata")
+load("../full_data/rdata/comb_edge_multivariate_dist.Rdata")
+load("../full_data/rdata/comb_margin_multivariate.Rdata")
+load("../full_data/rdata/comb_margin_multivariate_dist.Rdata")
+load("../full_data/rdata/comb_nonmelanoma_multivariate.Rdata")
+load("../full_data/rdata/comb_nonmelanoma_multivariate_dist.Rdata")
+
+load("../full_data/rdata/mono_core_multivariate.Rdata")
+load("../full_data/rdata/mono_core_multivariate_dist.Rdata")
+load("../full_data/rdata/mono_edge_multivariate.Rdata")
+load("../full_data/rdata/mono_edge_multivariate_dist.Rdata")
+load("../full_data/rdata/mono_margin_multivariate.Rdata")
+load("../full_data/rdata/mono_margin_multivariate_dist.Rdata")
+load("../full_data/rdata/mono_nonmelanoma_multivariate.Rdata")
+load("../full_data/rdata/mono_nonmelanoma_multivariate_dist.Rdata")
+
+# Results - spicy classification
+# Segmented cells
+load("../full_data/rdata/cellExp_core.Rdata")
+load("../full_data/rdata/cellExp_edge.Rdata")
+load("../full_data/rdata/cellExp_margin.Rdata")
+load("../full_data/rdata/cellExp_nonmelanoma.Rdata")
+
+load("../full_data/rdata/cellExp_core_dist.Rdata")
+load("../full_data/rdata/cellExp_edge_dist.Rdata")
+load("../full_data/rdata/cellExp_margin_dist.Rdata")
+load("../full_data/rdata/cellExp_nonmelanoma_dist.Rdata")
+
+# Results - spicy classification
+# Spicy objects
+load("../full_data/rdata/spicy_core.Rdata")
+load("../full_data/rdata/spicy_edge.Rdata")
+load("../full_data/rdata/spicy_margin.Rdata")
+load("../full_data/rdata/spicy_nonmelanoma.Rdata")
+
+load("../full_data/rdata/spicy_core_dist.Rdata")
+load("../full_data/rdata/spicy_edge_dist.Rdata")
+load("../full_data/rdata/spicy_margin_dist.Rdata")
+load("../full_data/rdata/spicy_nonmelanoma_dist.Rdata")
+
+```
+
+# Methodology figures
+
+## Example of the data during processing step
+
+```{r density processing}
+
+# Density
+
+process_example_density_original = barcode_dat_section %>% 
+  filter(oldID == "SP-15-013535") %>% 
+  ggplot() +
+  aes(x = x, y = y, colour = label) +
+  geom_point(cex = 0.01) +
+  geom_segment(mapping = aes(x = 0, xend = 10000, y = 1000, yend = 1000), colour = "black", size = 3) +
+  geom_text(mapping = aes(x = 12000, y = 1000), label = "1 cm", colour = "black", size = 14) +
+  geom_segment(mapping = aes(x = 0, xend = 1000, y = 5000, yend = 5000), colour = "black", size = 3) +
+  geom_text(mapping = aes(x = 3000, y = 5000), label = "1 mm", colour = "black", size = 14) +
+  labs(x = "", y = "") +
+  theme_classic() +
+  theme(legend.position = "none",
+        axis.text = element_blank())
+
+process_example_density_original
+
+process_example_density_partitioned1 = barcode_dat_section %>% 
+  filter(imageID == "SP-15-013535_1") %>% 
+  ggplot() +
+  aes(x = x, y = y, colour = label) +
+  geom_point(cex = 0.01) +
+  geom_segment(mapping = aes(x = 11000, xend = 12000, y = 20000, yend = 20000), colour = "black", size = 3) +
+  geom_text(mapping = aes(x = 10000, y = 20000), label = "1 mm", colour = "black", size = 14) +
+  labs(x = "", y = "") +
+  theme_classic() +
+  theme(legend.position = "none",
+        axis.text = element_blank())
+
+process_example_density_partitioned1
+
+process_example_density_partitioned2 = barcode_dat_section %>% 
+  filter(imageID == "SP-15-013535_2") %>% 
+  ggplot() +
+  aes(x = x, y = y, colour = label) +
+  geom_point(cex = 0.01) +
+  geom_segment(mapping = aes(x = 13500, xend = 14500, y = 1000, yend = 1000), colour = "black", size = 3) +
+  geom_text(mapping = aes(x = 15500, y = 1000), label = "1 mm", colour = "black", size = 14) +
+  labs(x = "", y = "") +
+  theme_classic() +
+  theme(legend.position = "none",
+        axis.text = element_blank())
+
+process_example_density_partitioned2
+
+process_example_density_sectioned1 = barcode_dat_section %>% 
+  filter(imageID == "SP-15-013535_1") %>% 
+  ggplot() +
+  aes(x = x, y = y, colour = region) +
+  geom_point(cex = 0.01) +
+  geom_segment(mapping = aes(x = 11000, xend = 12000, y = 20000, yend = 20000), colour = "black", size = 3) +
+  geom_text(mapping = aes(x = 10000, y = 20000), label = "1 mm", colour = "black", size = 14) +
+  labs(x = "", y = "") +
+  theme_classic() +
+  theme(legend.position = "none",
+        axis.text = element_blank())
+
+process_example_density_sectioned1
+
+process_example_density_sectioned2 = barcode_dat_section %>% 
+  filter(imageID == "SP-15-013535_2") %>% 
+  ggplot() +
+  aes(x = x, y = y, colour = region) +
+  geom_point(cex = 0.01) +
+  geom_segment(mapping = aes(x = 13500, xend = 14500, y = 1000, yend = 1000), colour = "black", size = 3) +
+  geom_text(mapping = aes(x = 15500, y = 1000), label = "1 mm", colour = "black", size = 14) +
+  labs(x = "", y = "") +
+  theme_classic() +
+  theme(legend.position = "none",
+        axis.text = element_blank())
+
+process_example_density_sectioned2
+
+## Saving
+ggsave(filename = "figures/process_example/process_example_density_original.jpg", plot = process_example_density_original,
+       width = 15, height = 7)
+ggsave(filename = "figures/process_example/process_example_density_partitioned1.jpg", plot = process_example_density_partitioned1,
+       width = 15, height = 7)
+ggsave(filename = "figures/process_example/process_example_density_partitioned2.jpg", plot = process_example_density_partitioned2,
+       width = 15, height = 7)
+ggsave(filename = "figures/process_example/process_example_density_sectioned1.jpg", plot = process_example_density_sectioned1,
+       width = 15, height = 7)
+ggsave(filename = "figures/process_example/process_example_density_sectioned2.jpg", plot = process_example_density_sectioned2,
+       width = 15, height = 7)
+```
+
+```{r distance processing}
+
+# Distance
+
+process_example_distance_original = barcode_dat_section_dist %>% 
+  filter(oldID == "SP-15-013535") %>% 
+  ggplot() +
+  aes(x = x, y = y, colour = label) +
+  geom_point(cex = 0.01) +
+  geom_segment(mapping = aes(x = 0, xend = 10000, y = 1000, yend = 1000), colour = "black", size = 3) +
+  geom_text(mapping = aes(x = 12000, y = 1000), label = "1 cm", colour = "black", size = 14) +
+  geom_segment(mapping = aes(x = 0, xend = 1000, y = 5000, yend = 5000), colour = "black", size = 3) +
+  geom_text(mapping = aes(x = 3000, y = 5000), label = "1 mm", colour = "black", size = 14) +
+  labs(x = "", y = "") +
+  theme_classic() +
+  theme(legend.position = "none",
+        axis.text = element_blank())
+
+process_example_distance_original
+
+process_example_distance_partitioned1 = barcode_dat_section_dist %>% 
+  filter(imageID == "SP-15-013535_1") %>% 
+  ggplot() +
+  aes(x = x, y = y, colour = label) +
+  geom_point(cex = 0.01) +
+  geom_segment(mapping = aes(x = 11000, xend = 12000, y = 20000, yend = 20000), colour = "black", size = 3) +
+  geom_text(mapping = aes(x = 10000, y = 20000), label = "1 mm", colour = "black", size = 14) +
+  labs(x = "", y = "") +
+  theme_classic() +
+  theme(legend.position = "none",
+        axis.text = element_blank())
+
+process_example_distance_partitioned1
+
+process_example_distance_partitioned2 = barcode_dat_section_dist %>% 
+  filter(imageID == "SP-15-013535_2") %>% 
+  ggplot() +
+  aes(x = x, y = y, colour = label) +
+  geom_point(cex = 0.01) +
+  geom_segment(mapping = aes(x = 13500, xend = 14500, y = 1000, yend = 1000), colour = "black", size = 3) +
+  geom_text(mapping = aes(x = 15500, y = 1000), label = "1 mm", colour = "black", size = 14) +
+  labs(x = "", y = "") +
+  theme_classic() +
+  theme(legend.position = "none",
+        axis.text = element_blank())
+
+process_example_distance_partitioned2
+
+process_example_distance_sectioned1 = barcode_dat_section_dist %>% 
+  filter(imageID == "SP-15-013535_1") %>% 
+  ggplot() +
+  aes(x = x, y = y, colour = region) +
+  geom_point(cex = 0.01) +
+  geom_segment(mapping = aes(x = 11000, xend = 12000, y = 20000, yend = 20000), colour = "black", size = 3) +
+  geom_text(mapping = aes(x = 10000, y = 20000), label = "1 mm", colour = "black", size = 14) +
+  labs(x = "", y = "") +
+  theme_classic() +
+  theme(legend.position = "none",
+        axis.text = element_blank())
+
+process_example_distance_sectioned1
+
+process_example_distance_sectioned2 = barcode_dat_section_dist %>% 
+  filter(imageID == "SP-15-013535_2") %>% 
+  ggplot() +
+  aes(x = x, y = y, colour = region) +
+  geom_point(cex = 0.01) +
+  geom_segment(mapping = aes(x = 13500, xend = 14500, y = 1000, yend = 1000), colour = "black", size = 3) +
+  geom_text(mapping = aes(x = 15500, y = 1000), label = "1 mm", colour = "black", size = 14) +
+  labs(x = "", y = "") +
+  theme_classic() +
+  theme(legend.position = "none",
+        axis.text = element_blank())
+
+process_example_distance_sectioned2
+
+## Saving
+ggsave(filename = "figures/process_example/process_example_distance_original.jpg", plot = process_example_distance_original,
+       width = 15, height = 7)
+ggsave(filename = "figures/process_example/process_example_distance_partitioned1.jpg", plot = process_example_distance_partitioned1,
+       width = 15, height = 7)
+ggsave(filename = "figures/process_example/process_example_distance_partitioned2.jpg", plot = process_example_distance_partitioned2,
+       width = 15, height = 7)
+ggsave(filename = "figures/process_example/process_example_distance_sectioned1.jpg", plot = process_example_distance_sectioned1,
+       width = 15, height = 7)
+ggsave(filename = "figures/process_example/process_example_distance_sectioned2.jpg", plot = process_example_distance_sectioned2,
+       width = 15, height = 7)
+```
+
+# Results figures
+
+## Clinical variables analysis
+
+```{r clinical variables classification function}
+
+## Sourcing classification function
+source("../clinical_variables/functions/get_classification_clinical.R")
+```
+
+```{r clinical variables curating data}
+
+## Reading clinical data
+clinical_variables = readxl::read_xlsx("../clinical_variables/Retrospective_Clinical data_Pathology_PIPresponse_22_4_21 (003).xlsx")
+
+## Selecting and renaming columns
+clinical_variables = clinical_variables %>%
+  select("patient" = "Pathology Reference No",
+         "response" = "Response",
+         "sex" = "Sex",
+         "age" = "Age(at start of treatment)",
+         "treatment" = "Treatment",
+         "therapy_line" = "Line of Therapy",
+         # "site" = "Primary melanoma site", # removed because some levels were not represented enough in the data to be able to make predictions
+         "cutaneous_primary" = "Cutaneous primary (YES/NO)",
+         "previous_mapki" = "Previous MAPKi (Yes/No)",
+         "ldh" = "Baseline LDH",
+         "mstage" = "M Stage at Entry")
+
+## Obtaining only distinct observations
+clinical_variables = clinical_variables %>% dplyr::distinct()
+
+## Converting variables to factors
+clinical_variables$response = as.factor(clinical_variables$response)
+clinical_variables$sex = as.factor(clinical_variables$sex)
+clinical_variables$treatment = as.factor(clinical_variables$treatment)
+clinical_variables$therapy_line = as.factor(clinical_variables$therapy_line)
+# clinical_variables$site = as.factor(clinical_variables$site)
+clinical_variables$cutaneous_primary = as.factor(clinical_variables$cutaneous_primary)
+clinical_variables$previous_mapki = as.factor(clinical_variables$previous_mapki)
+clinical_variables$ldh = as.factor(clinical_variables$ldh)
+clinical_variables$mstage = as.factor(clinical_variables$mstage)
+```
+
+```{r clinical variables training models}
+
+## Combination therapy
+invisible(capture.output(
+  clinical_classification_comb <- get_classification_clinical(filter(clinical_variables, treatment == "PD1"),
+                                                              no_repeats = 20, no_folds = 5)
+))
+
+# clinical_classification_comb$training_balacc_p$labels$title = "Combination Therapy: Model Balanced Accuracy on Training Data"
+clinical_classification_comb$training_balacc_p$labels$title = ""
+clinical_classification_comb$training_balacc_p$labels$subtitle = ""
+clinical_classification_comb$training_balacc_p = clinical_classification_comb$training_balacc_p +
+  scale_x_discrete(labels = c("Logistic\nRegression", "Logistic\nRegression\n(Lasso)", "RandomForest", "SVM", "XGBoost")) +
+  theme(axis.text = element_text(size = 20),
+        axis.title = element_text(size = 20))
+ggsave(clinical_classification_comb$training_balacc_p, filename = "figures/clinical_variables/comb_clinical_balacc_p.jpg", width = 10, height = 7)
+
+
+## Monotherapy
+invisible(capture.output(
+  clinical_classification_mono <- get_classification_clinical(filter(clinical_variables, treatment == "PD1.IPI"),
+                                                              no_repeats = 20, no_folds = 5)
+))
+
+# clinical_classification_mono$training_balacc_p$labels$title = "Monotherapy: Model Balanced Accuracy on Training Data"
+clinical_classification_mono$training_balacc_p$labels$title = ""
+clinical_classification_mono$training_balacc_p$labels$subtitle = ""
+clinical_classification_mono$training_balacc_p = clinical_classification_mono$training_balacc_p +
+  scale_x_discrete(labels = c("Logistic\nRegression", "Logistic\nRegression\n(Lasso)", "RandomForest", "SVM", "XGBoost")) +
+  theme(axis.text = element_text(size = 20),
+        axis.title = element_text(size = 20))
+ggsave(clinical_classification_mono$training_balacc_p, filename = "figures/clinical_variables/mono_clinical_balacc_p.jpg", width = 10, height = 7)
+
+```
+
+## Gene expression analysis
+
+```{r spatial classification function}
+
+## Sourcing classification function
+source("../gene_expression/functions/get_classification_gene_expression.R")
+```
+
+```{r gene expression curating data}
+
+# Curated counts
+
+## Reading data
+counts_raw = read.csv("../gene_expression/filtering_normalisation/TMM150log.csv")
+genenames = read.delim("../gene_expression/filtering_normalisation/genename_150.txt")
+
+## Transposing and removing identifier row
+counts_t = data.table::transpose(counts_raw[, -1])
+
+## Adding sample names as new column and gene names as column names
+colnames(counts_t) = genenames$genes
+counts_t = counts_t %>% 
+  mutate("sample" = colnames(counts_raw)[-1])
+
+## Adding clinical information (without Treatment)
+clinical = readxl::read_xlsx("../gene_expression/March2020CLC/Clinical Data_RNA samples.xlsx")
+counts_t = counts_t %>% dplyr::left_join(clinical, by = c("sample" = "RNA_ID"))
+
+## Removing all those patients that do not have clinical information (i.e. unknown responder status)
+counts = counts_t[!is.na(counts_t$Response), ]
+
+## Making all variable names legal (previously issue with gene names containing "-" hyphens)
+names(counts) = make.names(names(counts))
+
+## Coercing response into a factor variable
+counts$Response = as.factor(counts$Response)
+
+## Splitting by therapy
+counts_comb = counts %>% filter(Treatment == "anti-PD-1 + anti-CTLA-4")
+counts_mono = counts %>% filter(Treatment == "anti-PD-1")
+```
+
+```{r gene expression training models}
+
+# gOMP
+
+## Combination therapy
+invisible(capture.output(
+  comb_gomp_classification <- get_classification_gene_expression(no_folds = 5, no_repeats = 20,
+                                                                 treatment = "combination",
+                                                                 combdata = counts_comb, monodata = counts_mono,
+                                                                 method = "gomp")
+))
+comb_gomp_training_acc = comb_gomp_classification[["training_balacc_p"]]
+
+
+## Monotherapy
+invisible(capture.output(
+  mono_gomp_classification <- get_classification_gene_expression(no_folds = 5, no_repeats = 20,
+                                                                 treatment = "monotherapy",
+                                                                 combdata = counts_comb, monodata = counts_mono,
+                                                                 method = "gomp")
+))
+mono_gomp_training_acc = mono_gomp_classification[["training_balacc_p"]]
+
+
+
+# limma top 100
+
+## Combination therapy
+invisible(capture.output(
+  comb_limma100_classification <- get_classification_gene_expression(no_folds = 5, no_repeats = 20,
+                                                                     treatment = "combination",
+                                                                     combdata = counts_comb, monodata = counts_mono,
+                                                                     method = "limma100")
+))
+comb_limma100_training_acc = comb_limma100_classification[["training_balacc_p"]]
+
+
+## Monotherapy
+invisible(capture.output(
+  mono_limma100_classification <- get_classification_gene_expression(no_folds = 5, no_repeats = 20,
+                                                                     treatment = "monotherapy",
+                                                                     combdata = counts_comb, monodata = counts_mono,
+                                                                     method = "limma100")
+))
+
+mono_limma100_training_acc = mono_limma100_classification[["training_balacc_p"]]
+
+
+
+# limma top 20
+
+## Combination therapy
+invisible(capture.output(
+  comb_limma20_classification <- get_classification_gene_expression(no_folds = 5, no_repeats = 20,
+                                                                    treatment = "combination",
+                                                                    combdata = counts_comb, monodata = counts_mono,
+                                                                    method = "limma20")
+))
+
+comb_limma20_training_acc = comb_limma20_classification[["training_balacc_p"]]
+
+
+## Monotherapy
+invisible(capture.output(
+  mono_limma20_classification <- get_classification_gene_expression(no_folds = 5, no_repeats = 20,
+                                                                    treatment = "monotherapy",
+                                                                    combdata = counts_comb, monodata = counts_mono,
+                                                                    method = "limma20")
+))
+
+mono_limma20_training_acc = mono_limma20_classification[["training_balacc_p"]]
+
+```
+
+```{r gene expression balanced accuracy classification}
+
+## Obtaining combined data and plotting
+combined_gene_expression_balacc = rbind(
+  comb_gomp_training_acc$data %>% cbind("feat" = rep("gomp", nrow(.)),
+                                        "treatment" = rep("Combination Therapy", nrow(.))),
+  mono_gomp_training_acc$data %>% cbind("feat" = rep("gomp", nrow(.)),
+                                        "treatment" = rep("Monotherapy", nrow(.))),
+  comb_limma100_training_acc$data %>% cbind("feat" = rep("limma100", nrow(.)),
+                                            "treatment" = rep("Combination Therapy", nrow(.))),
+  mono_limma100_training_acc$data %>% cbind("feat" = rep("limma100", nrow(.)),
+                                            "treatment" = rep("Monotherapy", nrow(.))),
+  mono_limma20_training_acc$data %>% cbind("feat" = rep("limma20", nrow(.)),
+                                           "treatment" = rep("Combination Therapy", nrow(.))),
+  comb_limma20_training_acc$data %>% cbind("feat" = rep("limma20", nrow(.)),
+                                           "treatment" = rep("Monotherapy", nrow(.)))
+) %>% 
+  ggplot() +
+  aes(x = feat, y = value, fill = method) +
+  labs(x = "", y = "Balanced Accuracy", fill = "Model:") +
+       # title = "Model Balanced Accuracy on Gene Expression",
+       # subtitle = paste("5-fold repeated CV; n = 20, k = 5\n", 
+       #                  "Combination Therapy:", table(counts_comb$Response)[2], "Responders &", table(counts_comb$Response)[1], "Non-responders\n",
+       #                  "Monotherapy:", table(counts_mono$Response)[2], "Responders &", table(counts_mono$Response)[1], "Non-responders\n")) +
+  scale_x_discrete(labels = c("gOMP", "Limma (top 100 genes)", "Limma (top 20 genes)")) +
+  scale_fill_discrete(labels = c("Logistic Regression", "Logistic Regression (Lasso)", "RandomForest", "SVM", "XGBoost")) +
+  geom_boxplot() +
+  facet_grid(rows = vars(treatment)) +
+  geom_hline(yintercept = 0.5, linetype = "dashed") +
+  theme_classic() +
+  theme(legend.position = "bottom",
+        axis.text = element_text(size = 12),
+        axis.title = element_text(size = 16),
+        legend.text = element_text(size = 12),
+        legend.title = element_text(size = 12),
+        strip.text = element_text(size = 12))
+        # plot.title = element_text(hjust = 0.5),
+        # plot.subtitle = element_text(hjust = 0.5))
+
+ggsave(filename = "figures/gene_expression/combined_gene_expression_balacc.jpeg", plot = combined_gene_expression_balacc,
+       width = 10, height = 7)
+```
+
+## Testing
+
+```{r gene expression testing limma workflow}
+
+## Function to get significant genes and histograms
+get_gene_significance = function(data){
+  
+  ## Obtaining data
+  response = factor(data$Response)
+  levels(response) = c("Nonresponder", "Responder")
+  counts = data %>% select(-Response, -sample, -Treatment)
+  
+  ## Obtaining model matrix and fitting
+  design = model.matrix(~ 0 + response)
+  fit = lmFit(t(counts), design)
+  
+  ## Obtaining contrast matrix and fitting
+  contrast_matrix = makeContrasts(responseNonresponder-responseResponder, levels = design)
+  fit_contrast = contrasts.fit(fit, contrast_matrix)
+  efit_contrasts = eBayes(fit_contrast)
+  
+  ## Obtaining histogram of p-values
+  pvalue_histogram = efit_contrasts$p.value[, 1] %>% as.data.frame() %>% 
+    ggplot() +
+    aes_string(x = ".") +
+    geom_histogram(fill = "grey", colour = "black", bins = 20) +
+    labs(x = "p-value", y = "Count", title = "Differential Gene Expression p-values\nResponders vs Non-Responders") +
+    theme_classic() +
+    theme(plot.title = element_text(hjust = 0.5))
+  
+  ## Obtaining list of top genes
+  topgenes = topTable(efit_contrasts, coef = 1, adjust.method = "bonferroni", n = 10, p.value = 1)
+  
+  return(list(pvalue_histogram, topgenes))
+}
+
+
+## Combination therapy
+comb_gene_significance = get_gene_significance(counts_comb)
+comb_gene_phist = comb_gene_significance[[1]]
+# comb_gene_phist$labels$title = paste("Combination Therapy:", comb_gene_phist$labels$title)
+comb_gene_phist$labels$title = ""
+comb_gene_phist$labels$subtitle = ""
+comb_gene_phist = comb_gene_phist +
+  theme(axis.text = element_text(size = 20),
+        axis.title = element_text(size = 20))
+ggsave(filename = "figures/gene_expression/combined_gene_significance_histogram.jpeg", plot = comb_gene_phist,
+       width = 10, height = 7)
+
+## Monotherapy
+mono_gene_significance = get_gene_significance(counts_mono)
+mono_gene_phist = mono_gene_significance[[1]]
+# mono_gene_phist$labels$title = paste("Monotherapy:", mono_gene_phist$labels$title)
+mono_gene_phist$labels$title = ""
+mono_gene_phist$labels$subtitle = ""
+mono_gene_phist = mono_gene_phist +
+  theme(axis.text = element_text(size = 20),
+        axis.title = element_text(size = 20))
+ggsave(filename = "figures/gene_expression/monotherapy_gene_significance_histogram.jpeg", plot = mono_gene_phist,
+       width = 10, height = 7)
+```
+
+## Naive heatmaps
+
+```{r heatmap combination therapy}
+
+
+# Matrix
+
+
+comb_barcodeprop_mat =
+  barcodeprop_comb %>% 
+  select(-imageid, -response, -batch) %>% 
+  as.matrix() %>% 
+  t() %>% 
+  
+  # ## Sqrt transformation
+  # apply(2, sqrt)
+  
+  ## Changing column names
+  `colnames<-`(barcodeprop_comb$imageid)
+
+
+
+# Annotations
+
+
+## Column annotation: response and batch
+
+comb_anncol = data.frame("Response" = barcodeprop_comb$response,
+                         "Batch" = barcodeprop_comb$batch) %>% 
+  `rownames<-`(colnames(comb_barcodeprop_mat)) # Setting rownames to imageid (colnames of barcodeprop_mat)
+
+
+## Row annotation: melanoma
+
+comb_annrow = data.frame("Cell Type" = rep("Non-melanoma", nrow(comb_barcodeprop_mat))) %>%  # Populating with all Non-melanoma for now
+  `colnames<-`("Cell Type") %>%  # For nicer plotting
+  `rownames<-`(rownames(comb_barcodeprop_mat))  # Setting rownames to cell types (rownames of cellprop_mat)
+
+## Obtaining row indexes which are "melanoma" AND NOT "non-melanoma"
+melanoma_index = (str_detect(rownames(comb_annrow), "melanoma") & !str_detect(rownames(comb_annrow), "non-melanoma"))
+
+comb_annrow[melanoma_index, ] = "Melanoma" # Changing melanoma cells to melanoma classification
+
+
+## Defining colours
+
+col = RColorBrewer::brewer.pal(8, "Paired")
+comb_cols = list(
+  "Response" = (unique(comb_anncol$Response)) %>% setNames(nm = .,  object = col[1:2]),
+  "Batch" = (unique(comb_anncol$Batch)) %>% setNames(nm = .,  object = col[3:8])
+)
+
+
+## Creating heatmap annotation
+
+comb_ha = HeatmapAnnotation(
+  df = comb_anncol,
+  col = comb_cols
+)
+
+
+
+# Creating heatmap
+
+# png("figures/naive_heatmap/combination_naive_heatmap.png", width = 20, height = 15, units = "cm", res = 1200)
+
+ComplexHeatmap::Heatmap(
+  t(scale(t(comb_barcodeprop_mat))),
+  name = "Cell\nProportions",
+  column_title = "Combination Therapy",
+  top_annotation = comb_ha,
+  split = comb_annrow$`Cell Type`,
+  show_row_names = FALSE,
+  show_column_names = FALSE,
+  show_row_dend = FALSE)
+
+# dev.off()
+
+```
+
+```{r heatmap monotherapy}
+
+# Matrix
+
+
+mono_barcodeprop_mat =
+  barcodeprop_mono %>% 
+  select(-imageid, -response, -batch) %>% 
+  as.matrix() %>% 
+  t() %>% 
+  
+  # ## Sqrt transformation
+  # apply(2, sqrt)
+  
+  ## Changing column names
+  `colnames<-`(barcodeprop_mono$imageid)
+
+
+
+# Annotations
+
+
+## Column annotation: response and batch
+
+mono_anncol = data.frame("Response" = barcodeprop_mono$response,
+                         "Batch" = barcodeprop_mono$batch) %>% 
+  `rownames<-`(colnames(mono_barcodeprop_mat)) # Setting rownames to imageid (colnames of barcodeprop_mat)
+
+
+## Row annotation: melanoma
+
+mono_annrow = data.frame("Cell Type" = rep("Non-melanoma", nrow(mono_barcodeprop_mat))) %>%  # Populating with all Non-melanoma for now
+  `colnames<-`("Cell Type") %>%  # For nicer plotting
+  `rownames<-`(rownames(mono_barcodeprop_mat))  # Setting rownames to cell types (rownames of cellprop_mat)
+
+## Obtaining row indexes which are "melanoma" AND NOT "non-melanoma"
+melanoma_index = (str_detect(rownames(mono_annrow), "melanoma") & !str_detect(rownames(mono_annrow), "non-melanoma"))
+
+mono_annrow[melanoma_index, ] = "Melanoma" # Changing melanoma cells to melanoma classification
+
+
+## Defining colours
+
+col = RColorBrewer::brewer.pal(8, "Paired")
+mono_cols = list(
+  "Response" = (unique(mono_anncol$Response)) %>% setNames(nm = .,  object = col[1:2]),
+  "Batch" = (unique(mono_anncol$Batch)) %>% setNames(nm = .,  object = col[3:8])
+)
+
+
+## Creating heatmap annotation
+
+mono_ha = HeatmapAnnotation(
+  df = mono_anncol,
+  col = mono_cols
+)
+
+
+
+# Creating heatmap
+
+
+# png("figures/naive_heatmap/monotherapy_naive_heatmap.png", width = 20, height = 15, units = "cm", res = 1200)
+
+ComplexHeatmap::Heatmap(
+  t(scale(t(mono_barcodeprop_mat))),
+  name = "Cell\nProportions",
+  column_title = "Monotherapy",
+  top_annotation = mono_ha,
+  split = mono_annrow$`Cell Type`,
+  show_row_names = FALSE,
+  show_column_names = FALSE,
+  show_row_dend = FALSE)
+
+# dev.off()
+
+```
+
+## Naive classification accuracies
+
+```{r naive classification function}
+
+## Sourcing classification function
+source("../full_data/functions/analysis/get_classification.R")
+```
+
+```{r spatial classification combination therapy}
+
+## Combination therapy
+invisible(capture.output(
+  comb_classification <- get_classification(no_folds = 5, no_repeats = 20,
+                                            treatment = "combination", 
+                                            combdata = barcodeprop_comb, monodata = barcodeprop_mono)
+))
+
+comb_training_balacc_p = comb_classification[["training_balacc_p"]]
+# comb_training_balacc_p$labels$title = "Combination Therapy: Model Balanced Accuracy on Training Data"
+comb_training_balacc_p$labels$title = ""
+comb_training_balacc_p$labels$subtitle = ""
+comb_training_balacc_p = comb_training_balacc_p +
+  scale_x_discrete(labels = c("Logistic\nRegression", "Logistic\nRegression\n(Lasso)", "RandomForest", "SVM", "XGBoost")) +
+  theme(axis.text = element_text(size = 20),
+        axis.title = element_text(size = 20))
+
+
+ggsave(filename = "figures/naive_modelaccuracy/combination_balacc.jpg", plot = comb_training_balacc_p,
+       width = 10, height = 7)
+```
+
+```{r naive classification monotherapy}
+
+## Monotherapy
+invisible(capture.output(
+  mono_classification <- get_classification(no_folds = 5, no_repeats = 20,
+                                            treatment = "monotherapy", 
+                                            combdata = barcodeprop_comb, monodata = barcodeprop_mono)
+))
+
+mono_training_acc_p = mono_classification[["training_acc_p"]]
+mono_training_acc_p$labels$title = ""
+mono_training_acc_p$labels$subtitle = ""
+mono_training_acc_p$labels$y = "Accuracy"
+mono_training_acc_p = mono_training_acc_p +
+  scale_x_discrete(labels = c("Logistic\nRegression", "Logistic\nRegression\n(Lasso)", "RandomForest", "SVM", "XGBoost")) +
+  theme(axis.text = element_text(size = 20),
+        axis.title = element_text(size = 20))
+
+ggsave(filename = "figures/naive_modelaccuracy/monotherapy_acc.jpg", plot = mono_training_acc_p,
+       width = 10, height = 7)
+```
+
+## Naive hotelling's t-test
+
+```{r naive hotelling combination therapy}
+
+comb_multivar_p = ggplot(data.frame(x = comb_proptest$results)) +
+  aes(x = x, y = ..density..) +
+  geom_histogram(colour = "black", fill = "grey") +
+  geom_vline(xintercept = comb_proptest$stats$statistic,
+             colour = "red") +
+  geom_text(mapping = aes(x = 40, y = 0.01),
+            size = 10,
+            label = paste("p =", comb_proptest$pval),
+            colour = "red") +
+  labs(x = expression(paste("Distribution of permutation Hotelling's ", T^2, " statistics")),
+       y = "Density") +
+       # title = "Combination Therapy",
+       # subtitle = "n = 10,000 permutations") +
+  theme_classic() +
+  theme(plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5),
+        axis.text = element_text(size = 20),
+        axis.title = element_text(size = 20))
+
+ggsave(filename = "figures/naive_testing/combination_multivariate.jpg", plot = comb_multivar_p,
+       width = 10, height = 7)
+```
+
+```{r naive hotelling monotherapy}
+
+mono_multivar_p = ggplot(data.frame(x = mono_proptest$results)) +
+  aes(x = x, y = ..density..) +
+  geom_histogram(colour = "black", fill = "grey") +
+  geom_vline(xintercept = mono_proptest$stats$statistic,
+             colour = "red") +
+  geom_text(mapping = aes(x = 40, y = 0.01),
+            size = 10,
+            label = paste("p =", mono_proptest$pval),
+            colour = "red") +
+  labs(x = expression(paste("Distribution of permutation Hotelling's ", T^2, " statistics")),
+       y = "Density") +
+       # title = "Monotherapy",
+       # subtitle = "n = 10,000 permutations") +
+  theme_classic() +
+  theme(plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5),
+        axis.text = element_text(size = 20),
+        axis.title = element_text(size = 20))
+
+ggsave(filename = "figures/naive_testing/monotherapy_multivariate.jpg", plot = mono_multivar_p,
+       width = 10, height = 7)
+```
+
+Covariance matrices estimated w/ James-Stein estimator.
+
+## Naive univariate
+
+No significance for combination univariate.
+
+```{r naive univariate combination NO SIGNIFICANCE}
+
+# ## Setting seed for reproducibility
+# set.seed(2021)
+# 
+# ## Defining number of permutations
+# B = 10000
+# 
+# ## Initialising list to store values
+# comb_perm_tstat = list()
+# 
+# for(celltype in (barcodeprop_comb %>% select(-batch, -response, -imageid) %>% colnames())){
+#   
+#   permuted_dat = barcodeprop_comb
+#   t_null = vector("numeric", B)
+#   t_formula = as.formula(paste0("`", celltype, "` ", "~ response"))
+#   
+#   ## Obtaining true test statistic
+#   tt = t.test(t_formula, data = barcodeprop_comb)$statistic
+#   
+#   ## Obtaining permuted test statistics
+#   for(i in 1:B){
+#     permuted_dat$response = sample(barcodeprop_comb$response) # Permuting
+#     t_null[i] = t.test(t_formula, data = permuted_dat)$statistic # Obtaining test statistic
+#   }
+#   
+#   ## Obtaining p-value (two-sided test)
+#   pval = mean(abs(t_null) >= abs(tt))
+#   
+#   comb_perm_tstat[[celltype]] = list(tt = tt, t_null = t_null, pval = pval)
+#   
+# }
+# 
+# ## Obtaining significant cell types
+# ## Significance level of 0.05 using bonferroni correction
+# comb_sig = comb_perm_tstat %>% sapply(function(x) x$pval) %>% sort() %>% 
+#   `*`(barcodeprop_comb %>% select(-batch, -response, -imageid) %>% colnames() %>% length()) %>% 
+#   .[{which(. < 0.05)}]
+#
+#
+
+```
+
+No significance for monotherapy univariate.
+
+```{r naive univariate monotherapy NO SIGNIFICANCE}
+
+# ## Setting seed for reproducibility
+# set.seed(2021)
+# 
+# ## Defining number of permutations
+# B = 10000
+# 
+# ## Initialising list to store values
+# mono_perm_tstat = list()
+# 
+# for(celltype in (barcodeprop_mono %>% select(-batch, -response, -imageid) %>% colnames())){
+#   
+#   permuted_dat = barcodeprop_mono
+#   t_null = vector("numeric", B)
+#   t_formula = as.formula(paste0("`", celltype, "` ", "~ response"))
+#   
+#   ## Obtaining true test statistic
+#   tt = t.test(t_formula, data = barcodeprop_mono)$statistic
+#   
+#   ## Obtaining permuted test statistics
+#   for(i in 1:B){
+#     permuted_dat$response = sample(barcodeprop_mono$response) # Permuting
+#     t_null[i] = t.test(t_formula, data = permuted_dat)$statistic # Obtaining test statistic
+#   }
+#   
+#   ## Obtaining p-value (two-sided test)
+#   pval = mean(abs(t_null) >= abs(tt))
+#   
+#   mono_perm_tstat[[celltype]] = list(tt = tt, t_null = t_null, pval = pval)
+#   
+# }
+# 
+# ## Obtaining significant cell types
+# ## Significance level of 0.05 using bonferroni correction
+# mono_sig = mono_perm_tstat %>% sapply(function(x) x$pval) %>% sort() %>% 
+#   `*`(barcodeprop_mono %>% select(-batch, -response, -imageid) %>% colnames() %>% length()) %>% 
+#   .[{which(. < 0.05)}]
+```
+
+
+
+## Spatial heatmaps
+
+### Combination core
+
+```{r combination core density}
+
+comb_core_barcodeprop_mat =
+  sectionprop_comb %>% 
+  filter(region == "core") %>% 
+  select(-imageID, -response, -batch, -region) %>% 
+  as.matrix() %>% 
+  t() %>% 
+  
+  # ## Sqrt transformation
+  # apply(2, sqrt)
+  
+  ## Changing column names
+  `colnames<-`(sectionprop_comb %>% filter(region == "core") %>% pull(imageID))
+
+
+
+# Annotations
+
+
+## Column annotation: response and batch
+
+comb_core_anncol = data.frame("Response" = sectionprop_comb %>% filter(region == "core") %>% pull(response),
+                         "Batch" = sectionprop_comb %>% filter(region == "core") %>% pull(batch)) %>% 
+  `rownames<-`(colnames(comb_core_barcodeprop_mat)) # Setting rownames to imageid (colnames of barcodeprop_mat)
+
+
+## Row annotation: melanoma
+
+comb_core_annrow = data.frame("Cell Type" = rep("Non-melanoma", nrow(comb_core_barcodeprop_mat))) %>%  # Populating with all Non-melanoma for now
+  `colnames<-`("Cell Type") %>%  # For nicer plotting
+  `rownames<-`(rownames(comb_core_barcodeprop_mat))  # Setting rownames to cell types (rownames of cellprop_mat)
+
+## Obtaining row indexes which are "melanoma" AND NOT "non-melanoma"
+melanoma_index = (str_detect(rownames(comb_core_annrow), "melanoma") & !str_detect(rownames(comb_core_annrow), "non-melanoma"))
+
+comb_core_annrow[melanoma_index, ] = "Melanoma" # Changing melanoma cells to melanoma classification
+
+
+## Defining colours
+
+col = RColorBrewer::brewer.pal(8, "Paired")
+comb_core_cols = list(
+  "Response" = (unique(comb_core_anncol$Response)) %>% setNames(nm = .,  object = col[1:2]),
+  "Batch" = (unique(comb_core_anncol$Batch) %>% sort()) %>% setNames(nm = .,  object = col[3:8])
+)
+
+
+## Creating heatmap annotation
+
+comb_core_ha = HeatmapAnnotation(
+  df = comb_core_anncol,
+  col = comb_core_cols
+)
+
+
+
+# Creating heatmap
+
+
+# png("figures/spatial_heatmap/combination_core_density_heatmap.png", width = 20, height = 15, units = "cm", res = 1200)
+
+ComplexHeatmap::Heatmap(
+  t(scale(t(comb_core_barcodeprop_mat))),
+  name = "Cell\nProportions",
+  column_title = "Combination Therapy",
+  top_annotation = comb_core_ha,
+  split = comb_core_annrow$`Cell Type`,
+  show_row_names = FALSE,
+  show_column_names = FALSE,
+  show_row_dend = FALSE)
+
+# dev.off()
+```
+
+### Monotherapy core
+
+```{r monotherapy core density}
+
+mono_core_barcodeprop_mat =
+  sectionprop_mono %>% 
+  filter(region == "core") %>% 
+  select(-imageID, -response, -batch, -region) %>% 
+  as.matrix() %>% 
+  t() %>% 
+  
+  # ## Sqrt transformation
+  # apply(2, sqrt)
+  
+  ## Changing column names
+  `colnames<-`(sectionprop_mono %>% filter(region == "core") %>% pull(imageID))
+
+
+
+# Annotations
+
+
+## Column annotation: response and batch
+
+mono_core_anncol = data.frame("Response" = sectionprop_mono %>% filter(region == "core") %>% pull(response),
+                         "Batch" = sectionprop_mono %>% filter(region == "core") %>% pull(batch)) %>% 
+  `rownames<-`(colnames(mono_core_barcodeprop_mat)) # Setting rownames to imageid (colnames of barcodeprop_mat)
+
+
+## Row annotation: melanoma
+
+mono_core_annrow = data.frame("Cell Type" = rep("Non-melanoma", nrow(mono_core_barcodeprop_mat))) %>%  # Populating with all Non-melanoma for now
+  `colnames<-`("Cell Type") %>%  # For nicer plotting
+  `rownames<-`(rownames(mono_core_barcodeprop_mat))  # Setting rownames to cell types (rownames of cellprop_mat)
+
+## Obtaining row indexes which are "melanoma" AND NOT "non-melanoma"
+melanoma_index = (str_detect(rownames(mono_core_annrow), "melanoma") & !str_detect(rownames(mono_core_annrow), "non-melanoma"))
+
+mono_core_annrow[melanoma_index, ] = "Melanoma" # Changing melanoma cells to melanoma classification
+
+
+## Defining colours
+
+col = RColorBrewer::brewer.pal(8, "Paired")
+mono_core_cols = list(
+  "Response" = (unique(mono_core_anncol$Response)) %>% setNames(nm = .,  object = col[1:2]),
+  "Batch" = (unique(mono_core_anncol$Batch) %>% sort()) %>% setNames(nm = .,  object = col[3:8])
+)
+
+
+## Creating heatmap annotation
+
+mono_core_ha = HeatmapAnnotation(
+  df = mono_core_anncol,
+  col = mono_core_cols
+)
+
+
+
+# Creating heatmap
+
+
+# png("figures/spatial_heatmap/monotherapy_core_density_heatmap.png", width = 20, height = 15, units = "cm", res = 1200)
+
+ComplexHeatmap::Heatmap(
+  t(scale(t(mono_core_barcodeprop_mat))),
+  name = "Cell\nProportions",
+  column_title = "Monotherapy",
+  top_annotation = mono_core_ha,
+  split = mono_core_annrow$`Cell Type`,
+  show_row_names = FALSE,
+  show_column_names = FALSE,
+  show_row_dend = FALSE)
+
+# dev.off()
+```
+
+
+
+## Spatial classification
+
+```{r spatial classification function}
+
+## Sourcing classification function
+source("../full_data/functions/analysis/get_classification_section.R")
+```
+
+```{r spatial classification combination therapy}
+
+## Core by density
+invisible(capture.output(
+  comb_core_classification <- get_classification_section(no_folds = 5, no_repeats = 20,
+                                                         section = "core", treatment = "combination", 
+                                                         combdata = sectionprop_comb, monodata = sectionprop_mono)
+))
+
+## Core by distance
+invisible(capture.output(
+  comb_core_classification_dist <- get_classification_section(no_folds = 5, no_repeats = 20,
+                                                              section = "core", treatment = "combination", 
+                                                              combdata = sectionprop_comb_dist, monodata = sectionprop_mono_dist)
+))
+
+## Edge by density
+invisible(capture.output(
+  comb_edge_classification <- get_classification_section(no_folds = 5, no_repeats = 20,
+                                                         section = "edge", treatment = "combination", 
+                                                         combdata = sectionprop_comb, monodata = sectionprop_mono)
+))
+
+## Edge by distance
+invisible(capture.output(
+  comb_edge_classification_dist <- get_classification_section(no_folds = 5, no_repeats = 20,
+                                                              section = "edge", treatment = "combination", 
+                                                              combdata = sectionprop_comb_dist, monodata = sectionprop_mono_dist)
+))
+
+## Margin by density
+invisible(capture.output(
+  comb_margin_classification <- get_classification_section(no_folds = 5, no_repeats = 20,
+                                                           section = "margin", treatment = "combination", 
+                                                           combdata = sectionprop_comb, monodata = sectionprop_mono)
+))
+
+## Margin by distance
+invisible(capture.output(
+  comb_margin_classification_dist <- get_classification_section(no_folds = 5, no_repeats = 20,
+                                                                section = "margin", treatment = "combination", 
+                                                                combdata = sectionprop_comb_dist, monodata = sectionprop_mono_dist)
+))
+
+## Nonmelanoma by density
+invisible(capture.output(
+  comb_nonmelanoma_classification <- get_classification_section(no_folds = 5, no_repeats = 20,
+                                                                section = "nonmelanoma", treatment = "combination", 
+                                                                combdata = sectionprop_comb, monodata = sectionprop_mono)
+))
+
+## Nonmelanoma by distance
+invisible(capture.output(
+  comb_nonmelanoma_classification_dist <- get_classification_section(no_folds = 5, no_repeats = 20,
+                                                                     section = "nonmelanoma", treatment = "combination", 
+                                                                     combdata = sectionprop_comb_dist, monodata = sectionprop_mono_dist)
+))
+
+## Plot data
+sectionprop_comb_plotdat = rbind(
+  
+  ## Density
+  rbind(
+    comb_core_classification$training_balacc_p$data %>% cbind("region" = rep("core", nrow(.))), 
+    comb_edge_classification$training_balacc_p$data %>% cbind("region" = rep("edge", nrow(.))), 
+    comb_margin_classification$training_balacc_p$data %>% cbind("region" = rep("margin", nrow(.))), 
+    comb_nonmelanoma_classification$training_balacc_p$data %>% cbind("region" = rep("nonmelanoma", nrow(.))),
+    comb_training_balacc_p$data %>% cbind("region" = rep("all", nrow(.)))
+  ) %>% cbind("calculation" = rep("Core by Density", nrow(.))),
+  
+  ## Distance
+  rbind(
+    comb_core_classification_dist$training_balacc_p$data %>% cbind("region" = rep("core", nrow(.))), 
+    comb_edge_classification_dist$training_balacc_p$data %>% cbind("region" = rep("edge", nrow(.))),
+    comb_margin_classification_dist$training_balacc_p$data %>% cbind("region" = rep("margin", nrow(.))),
+    comb_nonmelanoma_classification_dist$training_balacc_p$data %>% cbind("region" = rep("nonmelanoma", nrow(.))),
+    comb_training_balacc_p$data %>% cbind("region" = rep("all", nrow(.)))
+  ) %>% cbind("calculation" = rep("Core by Distance", nrow(.)))
+  
+)
+
+section_comb_training_balacc_p = sectionprop_comb_plotdat %>% 
+  ggplot() +
+  aes(x = region, y = value, fill = method) +
+  labs(x = "", y = "Balanced Accuracy", fill = "Model:") +
+       # title = "Combination Therapy: Model Balanced Accuracy on Training Data",
+       # subtitle = "5-fold repeated CV; n = 20, k = 5\n82 responders & 39 non-responders") +
+  scale_x_discrete(labels = c("Spatio-naive", "Core", "Edge", "Margin", "Non-melanoma")) +
+  scale_fill_discrete(labels = c("Logistic Regression", "Logistic Regression (Lasso)", "RandomForest", "SVM", "XGBoost")) +
+  facet_grid(rows = vars(calculation)) +
+  geom_boxplot() +
+  geom_hline(yintercept = 0.5, linetype = "dashed") +
+  theme_classic() +
+  theme(legend.position = "bottom",
+        plot.subtitle = element_text(hjust = 0.5),
+        plot.title = element_text(hjust = 0.5),
+        axis.text = element_text(size = 16),
+        axis.title = element_text(size = 20),
+        legend.text = element_text(size = 16),
+        legend.title = element_text(size = 16),
+        strip.text = element_text(size = 16))
+
+ggsave(filename = "figures/spatial_modelaccuracy/section_combination_balacc.jpg", plot = section_comb_training_balacc_p,
+       width = 15, height = 7)
+
+section_comb_training_balacc_p
+```
+
+```{r spatial classification monotherapy}
+
+## Core by density
+invisible(capture.output(
+  mono_core_classification <- get_classification_section(no_folds = 5, no_repeats = 20,
+                                                         section = "core", treatment = "monotherapy", 
+                                                         combdata = sectionprop_comb, monodata = sectionprop_mono)
+))
+
+## Core by distance
+invisible(capture.output(
+  mono_core_classification_dist <- get_classification_section(no_folds = 5, no_repeats = 20,
+                                                              section = "core", treatment = "monotherapy", 
+                                                              combdata = sectionprop_comb_dist, monodata = sectionprop_mono_dist)
+))
+
+## Edge by density
+invisible(capture.output(
+  mono_edge_classification <- get_classification_section(no_folds = 5, no_repeats = 20,
+                                                         section = "edge", treatment = "monotherapy", 
+                                                         combdata = sectionprop_comb, monodata = sectionprop_mono)
+))
+
+## Edge by distance
+invisible(capture.output(
+  mono_edge_classification_dist <- get_classification_section(no_folds = 5, no_repeats = 20,
+                                                              section = "edge", treatment = "monotherapy", 
+                                                              combdata = sectionprop_comb_dist, monodata = sectionprop_mono_dist)
+))
+
+## Margin by density
+invisible(capture.output(
+  mono_margin_classification <- get_classification_section(no_folds = 5, no_repeats = 20,
+                                                           section = "margin", treatment = "monotherapy", 
+                                                           combdata = sectionprop_comb, monodata = sectionprop_mono)
+))
+
+## Margin by distance
+invisible(capture.output(
+  mono_margin_classification_dist <- get_classification_section(no_folds = 5, no_repeats = 20,
+                                                                section = "margin", treatment = "monotherapy", 
+                                                                combdata = sectionprop_comb_dist, monodata = sectionprop_mono_dist)
+))
+
+## Nonmelanoma by density
+invisible(capture.output(
+  mono_nonmelanoma_classification <- get_classification_section(no_folds = 5, no_repeats = 20,
+                                                                section = "nonmelanoma", treatment = "monotherapy", 
+                                                                combdata = sectionprop_comb, monodata = sectionprop_mono)
+))
+
+## Nonmelanoma by distance
+invisible(capture.output(
+  mono_nonmelanoma_classification_dist <- get_classification_section(no_folds = 5, no_repeats = 20,
+                                                                     section = "nonmelanoma", treatment = "monotherapy", 
+                                                                     combdata = sectionprop_comb_dist, monodata = sectionprop_mono_dist)
+))
+
+## Plot data
+sectionprop_mono_plotdat = rbind(
+  
+  ## Density
+  rbind(
+    mono_core_classification$training_acc$data %>% cbind("region" = rep("core", nrow(.))), 
+    mono_edge_classification$training_acc_p$data %>% cbind("region" = rep("edge", nrow(.))), 
+    mono_margin_classification$training_acc_p$data %>% cbind("region" = rep("margin", nrow(.))), 
+    mono_nonmelanoma_classification$training_acc_p$data %>% cbind("region" = rep("nonmelanoma", nrow(.))),
+    mono_training_acc_p$data %>% cbind("region" = rep("all", nrow(.)))
+  ) %>% cbind("calculation" = rep("Core by Density", nrow(.))),
+  
+  ## Distance
+  rbind(
+    mono_core_classification_dist$training_acc_p$data %>% cbind("region" = rep("core", nrow(.))), 
+    mono_edge_classification_dist$training_acc_p$data %>% cbind("region" = rep("edge", nrow(.))),
+    mono_margin_classification_dist$training_acc_p$data %>% cbind("region" = rep("margin", nrow(.))),
+    mono_nonmelanoma_classification_dist$training_acc_p$data %>% cbind("region" = rep("nonmelanoma", nrow(.))),
+    mono_training_acc_p$data %>% cbind("region" = rep("all", nrow(.)))
+  ) %>% cbind("calculation" = rep("Core by Distance", nrow(.)))
+  
+)
+
+section_mono_training_acc_p = sectionprop_mono_plotdat %>% 
+  ggplot() +
+  aes(x = region, y = value, fill = method) +
+  labs(x = "", y = "Accuracy", fill = "Model:") +
+       # title = "Monotherapy: Model Accuracy on Training Data",
+       # subtitle = "5-fold repeated CV; n = 20, k = 5\n76 responders & 72 non-responders") +
+  scale_x_discrete(labels = c("Spatio-naive", "Core", "Edge", "Margin", "Non-melanoma")) +
+  scale_fill_discrete(labels = c("Logistic Regression", "Logistic Regression (Lasso)", "RandomForest", "SVM", "XGBoost")) +
+  facet_grid(rows = vars(calculation)) +
+  geom_boxplot() +
+  geom_hline(yintercept = 0.5, linetype = "dashed") +
+  theme_classic() +
+  theme(legend.position = "bottom",
+        plot.subtitle = element_text(hjust = 0.5),
+        plot.title = element_text(hjust = 0.5),
+        axis.text = element_text(size = 16),
+        axis.title = element_text(size = 20),
+        legend.text = element_text(size = 16),
+        legend.title = element_text(size = 16),
+        strip.text = element_text(size = 16))
+
+ggsave(filename = "figures/spatial_modelaccuracy/section_monotherapy_acc.jpg", plot = section_mono_training_acc_p,
+       width = 15, height = 7)
+
+section_mono_training_acc_p
+
+section_comb_training_balacc_p$data %>% group_by(method, region, calculation) %>% summarise(n = median(value)) %>% View()
+```
+
+
+## Spatial testing - univariate
+
+```{r function for univariate}
+
+## Sourcing univariate function
+source("../full_data/functions/analysis/get_univariate_section.R")
+```
+
+### Core
+
+No significance for combination margin
+
+```{r combination margin univariate posthoc NO SIGNIFICANCE}
+
+# ## Core
+# comb_core_univar = get_univariate_section(region = "core", data = sectionprop_comb)
+# comb_core_sig = comb_core_univar[["significant_celltypes"]]
+# comb_core_dist_univar = get_univariate_section(region = "core", data = sectionprop_comb_dist)
+# comb_core_dist_sig = comb_core_univar[["significant_celltypes"]]
+# 
+# mono_core_univar = get_univariate_section(region = "core", data = sectionprop_mono)
+# mono_core_sig = mono_core_univar[["significant_celltypes"]]
+# mono_core_dist_univar = get_univariate_section(region = "core", data = sectionprop_mono_dist)
+# mono_core_dist_sig = mono_core_dist_univar[["significant_celltypes"]]
+# 
+# 
+# ## Edge
+# comb_edge_univar = get_univariate_section(region = "edge", data = sectionprop_comb)
+# comb_edge_sig = comb_edge_univar[["significant_celltypes"]]
+# comb_edge_dist_univar = get_univariate_section(region = "edge", data = sectionprop_comb_dist)
+# comb_edge_dist_sig = comb_edge_univar[["significant_celltypes"]]
+# 
+# mono_edge_univar = get_univariate_section(region = "edge", data = sectionprop_mono)
+# mono_edge_sig = mono_edge_univar[["significant_celltypes"]]
+# mono_edge_dist_univar = get_univariate_section(region = "edge", data = sectionprop_mono_dist)
+# mono_edge_dist_sig = mono_edge_dist_univar[["significant_celltypes"]]
+# 
+# 
+# ## Margin --> NOTE that margin is defined the same in density and distance
+# comb_margin_univar = get_univariate_section(region = "margin", data = sectionprop_comb)
+# comb_margin_sig = comb_margin_univar[["significant_celltypes"]]
+# # comb_margin_dist_univar = get_univariate_section(region = "margin", data = sectionprop_comb_dist)
+# # comb_margin_dist_sig = comb_margin_univar[["significant_celltypes"]]
+# 
+mono_margin_univar = get_univariate_section(region = "margin", data = sectionprop_mono)
+mono_margin_sig = mono_margin_univar[["significant_celltypes"]]
+# # mono_margin_dist_univar = get_univariate_section(region = "margin", data = sectionprop_mono_dist)
+# # mono_margin_dist_sig = mono_margin_dist_univar[["significant_celltypes"]]
+# 
+# 
+# ## Nonmelanoma --> NOTE that nonmelanoma is defined the same in density and distance
+# comb_nonmelanoma_univar = get_univariate_section(region = "nonmelanoma", data = sectionprop_comb)
+# comb_nonmelanoma_sig = comb_nonmelanoma_univar[["significant_celltypes"]]
+# # comb_nonmelanoma_dist_univar = get_univariate_section(region = "nonmelanoma", data = sectionprop_comb_dist)
+# # comb_nonmelanoma_dist_sig = comb_nonmelanoma_univar[["significant_celltypes"]]
+# 
+# mono_nonmelanoma_univar = get_univariate_section(region = "nonmelanoma", data = sectionprop_mono)
+# mono_nonmelanoma_sig = mono_nonmelanoma_univar[["significant_celltypes"]]
+# # mono_nonmelanoma_dist_univar = get_univariate_section(region = "nonmelanoma", data = sectionprop_mono_dist)
+# # mono_nonmelanoma_dist_sig = mono_nonmelanoma_dist_univar[["significant_celltypes"]]
+```
+
+```{r monotherapy margin univariate posthoc}
+
+
+mono_margin_perm_tstat = mono_margin_univar[["values"]]
+
+
+## Histogram of permutation test statistics
+mono_margin_univar_hist1_p = mono_margin_perm_tstat[[names(mono_margin_sig)[1]]][["t_null"]] %>%
+  as.data.frame() %>% `colnames<-`(names(mono_margin_sig)[1]) %>%
+  ggplot() +
+  aes_string(x = paste0("`", names(mono_margin_sig)[1], "`")) +
+  aes(y = ..density..) +
+  geom_histogram(colour = "black", fill = "grey", binwidth = 0.5) +
+  geom_vline(xintercept = mono_margin_perm_tstat[[names(mono_margin_sig)[1]]][["tt"]],
+             colour = "red") +
+  geom_text(mapping = aes(x = 4, y = 0.03),
+            size = 10,
+            label = paste("p =", mono_margin_perm_tstat[[names(mono_margin_sig)[1]]][["pval"]]),
+            colour = "red") +
+  labs(x = "Distribution of permutation t statistics",
+       y = "Density") +
+       # title = "Monotherapy (margin)",
+       # subtitle = paste0(toupper(substring(names(mono_margin_sig)[1], 1, 1)), substring(names(mono_margin_sig)[1], 2))) +
+  theme_classic() +
+  theme(plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5),
+        axis.text = element_text(size = 20),
+        axis.title = element_text(size = 20))
+
+mono_margin_univar_hist1_p
+
+ggsave("figures/spatial_testing/monotherapy_margin_univariate_histogram_1.jpg", plot = mono_margin_univar_hist1_p, width = 10, height = 7)
+
+## Barplot of significant cell type
+mono_margin_univar_box1_p = sectionprop_mono_margin %>% 
+  ggplot() +
+  aes(x = response, fill = response) +
+  aes_string(y = paste0("log(`", names(mono_margin_sig)[1], "`)")) +
+  geom_boxplot(alpha = 0.8) +
+  # geom_jitter(width = 0.2, cex = 0.5, alpha = 0.8) +
+  labs(x = "", y = expression(paste(log[10], " Cell Type Proportion"))) +
+       # title = "Monotherapy (margin)",
+       # subtitle = paste0(toupper(substring(names(mono_margin_sig)[1], 1, 1)), substring(names(mono_margin_sig)[1], 2))) +
+  coord_flip() +
+  theme_classic() +
+  theme(legend.position = "none",
+        plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5),
+        axis.text = element_text(size = 20),
+        axis.title = element_text(size = 20))
+
+mono_margin_univar_box1_p
+
+ggsave("figures/spatial_testing/monotherapy_margin_univariate_box_1.jpg", plot = mono_margin_univar_box1_p, width = 10, height = 7)
+```
+
+
+## Spatial testing - multivaraite
+
+```{r spatial testing combination therapy}
+
+## Function to remove titles, subtitles, and resize text
+resize_hist = function(graph){
+  
+  graph$labels$title = ""
+  graph$labels$subtitle = ""
+  graph$layers[[3]]$aes_params$size = 10
+  graph$layers[[3]]$mapping$x = (graph$layers[[3]]$mapping$x - 5)
+  graph$layers[[3]]$mapping$y = (graph$layers[[3]]$mapping$y + 0.015)
+  graph = graph +
+    theme(axis.text = element_text(size = 20),
+          axis.title = element_text(size = 20))
+  
+  return(graph)
+}
+
+## Core by density
+comb_core_multivariate_p = comb_core_multivariate[["hotelling_p"]]
+comb_core_multivariate_p = resize_hist(comb_core_multivariate_p)
+
+ggsave(filename = "figures/spatial_testing/combination_core_multivariate.jpg", plot = comb_core_multivariate_p, width = 10, height = 7)
+
+## Core by distance
+comb_core_multivariate_dist_p = comb_core_multivariate_dist[["hotelling_p"]]
+comb_core_multivariate_dist_p = resize_hist(comb_core_multivariate_dist_p)
+ggsave(filename = "figures/spatial_testing/combination_core_multivariate_dist.jpg", plot = comb_core_multivariate_dist_p, width = 10, height = 7)
+
+## Edge by density
+comb_edge_multivariate_p = comb_edge_multivariate[["hotelling_p"]]
+comb_edge_multivariate_p = resize_hist(comb_edge_multivariate_p)
+ggsave(filename = "figures/spatial_testing/combination_edge_multivariate.jpg", plot = comb_edge_multivariate_p, width = 10, height = 7)
+
+## Edge by distance
+comb_edge_multivariate_dist_p = comb_edge_multivariate_dist[["hotelling_p"]]
+comb_edge_multivariate_dist_p = resize_hist(comb_edge_multivariate_dist_p)
+ggsave(filename = "figures/spatial_testing/combination_edge_multivariate_dist.jpg", plot = comb_edge_multivariate_dist_p, width = 10, height = 7)
+
+## Margin by density
+comb_margin_multivariate_p = comb_margin_multivariate[["hotelling_p"]]
+comb_margin_multivariate_p = resize_hist(comb_margin_multivariate_p)
+ggsave(filename = "figures/spatial_testing/combination_margin_multivariate.jpg", plot = comb_margin_multivariate_p, width = 10, height = 7)
+
+## Margin by distance
+comb_margin_multivariate_dist_p = comb_margin_multivariate_dist[["hotelling_p"]]
+comb_margin_multivariate_dist_p = resize_hist(comb_margin_multivariate_dist_p)
+ggsave(filename = "figures/spatial_testing/combination_margin_multivariate_dist.jpg", plot = comb_margin_multivariate_dist_p, width = 10, height = 7)
+
+## Nonmelanoma by density
+comb_nonmelanoma_multivariate_p = comb_nonmelanoma_multivariate[["hotelling_p"]]
+comb_nonmelanoma_multivariate_p = resize_hist(comb_nonmelanoma_multivariate_p)
+ggsave(filename = "figures/spatial_testing/combination_nonmelanoma_multivariate.jpg", plot = comb_nonmelanoma_multivariate_p, width = 10, height = 7)
+
+## Nonmelanoma by distance
+comb_nonmelanoma_multivariate_dist_p = comb_nonmelanoma_multivariate_dist[["hotelling_p"]]
+comb_nonmelanoma_multivariate_dist_p = resize_hist(comb_nonmelanoma_multivariate_dist_p)
+ggsave(filename = "figures/spatial_testing/combination_nonmelanoma_multivariate_dist.jpg", plot = comb_margin_multivariate_dist_p, width = 10, height = 7)
+```
+
+```{r spatial testing monotherapy}
+
+## Core by density
+mono_core_multivariate_p = mono_core_multivariate[["hotelling_p"]]
+mono_core_multivariate_p = resize_hist(mono_core_multivariate_p)
+ggsave(filename = "figures/spatial_testing/monotherapy_core_multivariate.jpg", plot = mono_core_multivariate_p, width = 10, height = 7)
+
+## Core by distance
+mono_core_multivariate_dist_p = mono_core_multivariate_dist[["hotelling_p"]]
+mono_core_multivariate_dist_p = resize_hist(mono_core_multivariate_dist_p)
+ggsave(filename = "figures/spatial_testing/monotherapy_core_multivariate_dist.jpg", plot = mono_core_multivariate_dist_p, width = 10, height = 7)
+
+## Edge by density
+mono_edge_multivariate_p = mono_edge_multivariate[["hotelling_p"]]
+mono_edge_multivariate_p = resize_hist(mono_edge_multivariate_p)
+ggsave(filename = "figures/spatial_testing/monotherapy_edge_multivariate.jpg", plot = mono_edge_multivariate_p, width = 10, height = 7)
+
+## Edge by distance
+mono_edge_multivariate_dist_p = mono_edge_multivariate_dist[["hotelling_p"]]
+mono_edge_multivariate_dist_p = resize_hist(mono_edge_multivariate_dist_p)
+ggsave(filename = "figures/spatial_testing/monotherapy_edge_multivariate_dist.jpg", plot = mono_edge_multivariate_dist_p, width = 10, height = 7)
+
+## Margin by density
+mono_margin_multivariate_p = mono_margin_multivariate[["hotelling_p"]]
+mono_margin_multivariate_p = resize_hist(mono_margin_multivariate_p)
+ggsave(filename = "figures/spatial_testing/monotherapy_margin_multivariate.jpg", plot = mono_margin_multivariate_p, width = 10, height = 7)
+
+## Margin by distance
+mono_margin_multivariate_dist_p = mono_margin_multivariate_dist[["hotelling_p"]]
+mono_margin_multivariate_dist_p = resize_hist(mono_margin_multivariate_dist_p)
+ggsave(filename = "figures/spatial_testing/monotherapy_margin_multivariate_dist.jpg", plot = mono_margin_multivariate_dist_p, width = 10, height = 7)
+
+## Nonmelanoma by density
+mono_nonmelanoma_multivariate_p = mono_nonmelanoma_multivariate[["hotelling_p"]]
+mono_nonmelanoma_multivariate_p = resize_hist(mono_nonmelanoma_multivariate_p)
+ggsave(filename = "figures/spatial_testing/monotherapy_nonmelanoma_multivariate.jpg", plot = mono_nonmelanoma_multivariate_p, width = 10, height = 7)
+
+## Nonmelanoma by distance
+mono_nonmelanoma_multivariate_dist_p = mono_nonmelanoma_multivariate_dist[["hotelling_p"]]
+mono_nonmelanoma_multivariate_dist_p = resize_hist(mono_nonmelanoma_multivariate_dist_p)
+ggsave(filename = "figures/spatial_testing/monotherapy_nonmelanoma_multivariate_dist.jpg", plot = mono_nonmelanoma_multivariate_dist_p, width = 10, height = 7)
+```
+
+
+## Spicy classification
+
+```{r spicy classification function}
+
+## Sourcing classification function
+source("../full_data/functions/analysis/get_classification_spicy.R")
+```
+
+```{r pairwise classification}
+
+
+## Because of sparsity of data (large number of NAs), using 4-fold CV with 25 repeats; and obtaining best lasso value with 3-fold CV (rather than 10-fold)
+
+
+# Full
+
+## Obtaining full pairwise data
+full_pairwise = cbind(
+  spicy_full$pairwiseAssoc %>% dplyr::bind_cols(), # Obtaining pairwise associations
+  cellExp$imagePheno %>% dplyr::bind_rows()        # Obtaining response and patient ID
+) %>% dplyr::right_join(
+  readxl::read_xlsx("../full_data/NewData/clinical.xlsx") %>% select(subject = `Pathology Reference No`, treatment = Treatment),
+  by = "subject"
+) # Obtaining treatment (monotherapy vs combination therapy) from clinical
+
+full_pairwise_comb = full_pairwise %>% filter(treatment == "combination anti-PD-1 + anti-CTLA-4")
+full_pairwise_mono = full_pairwise %>% filter(treatment == "anti-PD-1 monotherapy")
+
+## Combination classification
+invisible(capture.output(
+  full_pairwise_comb_classification <- get_classification_spicy(no_folds = 4, no_repeats = 25,
+                                                                treatment = "combination", 
+                                                                combdata = full_pairwise_comb, monodata = full_pairwise_mono)
+))
+
+## Monotherapy classification
+invisible(capture.output(
+  full_pairwise_mono_classification <- get_classification_spicy(no_folds = 4, no_repeats = 25,
+                                                                treatment = "monotherapy", 
+                                                                combdata = full_pairwise_comb, monodata = full_pairwise_mono)
+))
+
+
+
+# Core density
+
+## Obtaining core pairwise data
+core_pairwise = cbind(
+  spicy_core$pairwiseAssoc %>% dplyr::bind_cols(), # Obtaining pairwise associations
+  cellExp_core$imagePheno %>% dplyr::bind_rows()   # Obtaining response and patient ID
+) %>% dplyr::right_join(
+  readxl::read_xlsx("../full_data/NewData/clinical.xlsx") %>% select(subject = `Pathology Reference No`, treatment = Treatment),
+  by = "subject"
+) # Obtaining treatment (monotherapy vs combination therapy) from clinical
+
+core_pairwise_comb = core_pairwise %>% filter(treatment == "combination anti-PD-1 + anti-CTLA-4")
+core_pairwise_mono = core_pairwise %>% filter(treatment == "anti-PD-1 monotherapy")
+
+## Combination classification
+invisible(capture.output(
+  core_pairwise_comb_classification <- get_classification_spicy(no_folds = 4, no_repeats = 25,
+                                                                treatment = "combination", 
+                                                                combdata = core_pairwise_comb, monodata = core_pairwise_mono)
+))
+
+## Monotherapy classification
+invisible(capture.output(
+  core_pairwise_mono_classification <- get_classification_spicy(no_folds = 4, no_repeats = 25,
+                                                                treatment = "monotherapy", 
+                                                                combdata = core_pairwise_comb, monodata = core_pairwise_mono)
+))
+
+
+
+# Edge density
+
+## Obtaining edge pairwise data
+edge_pairwise = cbind(
+  spicy_edge$pairwiseAssoc %>% dplyr::bind_cols(), # Obtaining pairwise associations
+  cellExp_edge$imagePheno %>% dplyr::bind_rows()        # Obtaining response and patient ID
+) %>% dplyr::right_join(
+  readxl::read_xlsx("../full_data/NewData/clinical.xlsx") %>% select(subject = `Pathology Reference No`, treatment = Treatment),
+  by = "subject"
+) # Obtaining treatment (monotherapy vs combination therapy) from clinical
+
+edge_pairwise_comb = edge_pairwise %>% filter(treatment == "combination anti-PD-1 + anti-CTLA-4")
+edge_pairwise_mono = edge_pairwise %>% filter(treatment == "anti-PD-1 monotherapy")
+
+## Combination classification
+invisible(capture.output(
+  edge_pairwise_comb_classification <- get_classification_spicy(no_folds = 4, no_repeats = 25,
+                                                                treatment = "combination", 
+                                                                combdata = edge_pairwise_comb, monodata = edge_pairwise_mono)
+))
+
+## Monotherapy classification
+invisible(capture.output(
+  edge_pairwise_mono_classification <- get_classification_spicy(no_folds = 4, no_repeats = 25,
+                                                                treatment = "monotherapy", 
+                                                                combdata = edge_pairwise_comb, monodata = edge_pairwise_mono)
+))
+
+
+
+# Margin density
+
+## Obtaining margin pairwise data
+margin_pairwise = cbind(
+  spicy_margin$pairwiseAssoc %>% dplyr::bind_cols(), # Obtaining pairwise associations
+  cellExp_margin$imagePheno %>% dplyr::bind_rows()        # Obtaining response and patient ID
+) %>% dplyr::right_join(
+  readxl::read_xlsx("../full_data/NewData/clinical.xlsx") %>% select(subject = `Pathology Reference No`, treatment = Treatment),
+  by = "subject"
+) # Obtaining treatment (monotherapy vs combination therapy) from clinical
+
+margin_pairwise_comb = margin_pairwise %>% filter(treatment == "combination anti-PD-1 + anti-CTLA-4")
+margin_pairwise_mono = margin_pairwise %>% filter(treatment == "anti-PD-1 monotherapy")
+
+## Combination classification
+invisible(capture.output(
+  margin_pairwise_comb_classification <- get_classification_spicy(no_folds = 4, no_repeats = 25,
+                                                                treatment = "combination", 
+                                                                combdata = margin_pairwise_comb, monodata = margin_pairwise_mono)
+))
+
+## Monotherapy classification
+invisible(capture.output(
+  margin_pairwise_mono_classification <- get_classification_spicy(no_folds = 4, no_repeats = 25,
+                                                                treatment = "monotherapy", 
+                                                                combdata = margin_pairwise_comb, monodata = margin_pairwise_mono)
+))
+
+
+
+# Nonmelanoma density
+
+## Obtaining nonmelanoma pairwise data
+nonmelanoma_pairwise = cbind(
+  spicy_nonmelanoma$pairwiseAssoc %>% dplyr::bind_cols(), # Obtaining pairwise associations
+  cellExp_nonmelanoma$imagePheno %>% dplyr::bind_rows()        # Obtaining response and patient ID
+) %>% dplyr::right_join(
+  readxl::read_xlsx("../full_data/NewData/clinical.xlsx") %>% select(subject = `Pathology Reference No`, treatment = Treatment),
+  by = "subject"
+) # Obtaining treatment (monotherapy vs combination therapy) from clinical
+
+nonmelanoma_pairwise_comb = nonmelanoma_pairwise %>% filter(treatment == "combination anti-PD-1 + anti-CTLA-4")
+nonmelanoma_pairwise_mono = nonmelanoma_pairwise %>% filter(treatment == "anti-PD-1 monotherapy")
+
+## Combination classification
+invisible(capture.output(
+  nonmelanoma_pairwise_comb_classification <- get_classification_spicy(no_folds = 4, no_repeats = 25,
+                                                                treatment = "combination", 
+                                                                combdata = nonmelanoma_pairwise_comb, 
+                                                                monodata = nonmelanoma_pairwise_mono)
+))
+
+## Monotherapy classification
+invisible(capture.output(
+  nonmelanoma_pairwise_mono_classification <- get_classification_spicy(no_folds = 4, no_repeats = 25,
+                                                                treatment = "monotherapy", 
+                                                                combdata = nonmelanoma_pairwise_comb, 
+                                                                monodata = nonmelanoma_pairwise_mono)
+))
+
+
+
+# Core distance
+
+## Obtaining core_dist pairwise data
+core_dist_pairwise = cbind(
+  spicy_core_dist$pairwiseAssoc %>% dplyr::bind_cols(), # Obtaining pairwise associations
+  cellExp_core_dist$imagePheno %>% dplyr::bind_rows()   # Obtaining response and patient ID
+) %>% dplyr::right_join(
+  readxl::read_xlsx("../full_data/NewData/clinical.xlsx") %>% select(subject = `Pathology Reference No`, treatment = Treatment),
+  by = "subject"
+) # Obtaining treatment (monotherapy vs combination therapy) from clinical
+
+core_dist_pairwise_comb = core_dist_pairwise %>% filter(treatment == "combination anti-PD-1 + anti-CTLA-4")
+core_dist_pairwise_mono = core_dist_pairwise %>% filter(treatment == "anti-PD-1 monotherapy")
+
+## Combination classification
+invisible(capture.output(
+  core_dist_pairwise_comb_classification <- get_classification_spicy(no_folds = 4, no_repeats = 25,
+                                                                treatment = "combination", 
+                                                                combdata = core_dist_pairwise_comb, monodata = core_dist_pairwise_mono)
+))
+
+## Monotherapy classification
+invisible(capture.output(
+  core_dist_pairwise_mono_classification <- get_classification_spicy(no_folds = 4, no_repeats = 25,
+                                                                treatment = "monotherapy", 
+                                                                combdata = core_dist_pairwise_comb, monodata = core_dist_pairwise_mono)
+))
+
+
+
+# Edge distance
+
+## Obtaining edge_dist pairwise data
+edge_dist_pairwise = cbind(
+  spicy_edge_dist$pairwiseAssoc %>% dplyr::bind_cols(), # Obtaining pairwise associations
+  cellExp_edge_dist$imagePheno %>% dplyr::bind_rows()   # Obtaining response and patient ID
+) %>% dplyr::right_join(
+  readxl::read_xlsx("../full_data/NewData/clinical.xlsx") %>% select(subject = `Pathology Reference No`, treatment = Treatment),
+  by = "subject"
+) # Obtaining treatment (monotherapy vs combination therapy) from clinical
+
+edge_dist_pairwise_comb = edge_dist_pairwise %>% filter(treatment == "combination anti-PD-1 + anti-CTLA-4")
+edge_dist_pairwise_mono = edge_dist_pairwise %>% filter(treatment == "anti-PD-1 monotherapy")
+
+## Combination classification
+invisible(capture.output(
+  edge_dist_pairwise_comb_classification <- get_classification_spicy(no_folds = 4, no_repeats = 25,
+                                                                treatment = "combination", 
+                                                                combdata = edge_dist_pairwise_comb, monodata = edge_dist_pairwise_mono)
+))
+
+## Monotherapy classification
+invisible(capture.output(
+  edge_dist_pairwise_mono_classification <- get_classification_spicy(no_folds = 4, no_repeats = 25,
+                                                                treatment = "monotherapy", 
+                                                                combdata = edge_dist_pairwise_comb, monodata = edge_dist_pairwise_mono)
+))
+
+
+
+# Margin distance
+
+## Obtaining margin_dist pairwise data
+margin_dist_pairwise = cbind(
+  spicy_margin_dist$pairwiseAssoc %>% dplyr::bind_cols(), # Obtaining pairwise associations
+  cellExp_margin_dist$imagePheno %>% dplyr::bind_rows()   # Obtaining response and patient ID
+) %>% dplyr::right_join(
+  readxl::read_xlsx("../full_data/NewData/clinical.xlsx") %>% select(subject = `Pathology Reference No`, treatment = Treatment),
+  by = "subject"
+) # Obtaining treatment (monotherapy vs combination therapy) from clinical
+
+margin_dist_pairwise_comb = margin_dist_pairwise %>% filter(treatment == "combination anti-PD-1 + anti-CTLA-4")
+margin_dist_pairwise_mono = margin_dist_pairwise %>% filter(treatment == "anti-PD-1 monotherapy")
+
+## Combination classification
+invisible(capture.output(
+  margin_dist_pairwise_comb_classification <- get_classification_spicy(no_folds = 4, no_repeats = 25,
+                                                                treatment = "combination", 
+                                                                combdata = margin_dist_pairwise_comb, monodata = margin_dist_pairwise_mono)
+))
+
+## Monotherapy classification
+invisible(capture.output(
+  margin_dist_pairwise_mono_classification <- get_classification_spicy(no_folds = 4, no_repeats = 25,
+                                                                treatment = "monotherapy", 
+                                                                combdata = margin_dist_pairwise_comb, monodata = margin_dist_pairwise_mono)
+))
+
+
+
+# Nonmelanoma distance
+
+## Obtaining nonmelanoma_dist pairwise data
+nonmelanoma_dist_pairwise = cbind(
+  spicy_nonmelanoma_dist$pairwiseAssoc %>% dplyr::bind_cols(), # Obtaining pairwise associations
+  cellExp_nonmelanoma_dist$imagePheno %>% dplyr::bind_rows()        # Obtaining response and patient ID
+) %>% dplyr::right_join(
+  readxl::read_xlsx("../full_data/NewData/clinical.xlsx") %>% select(subject = `Pathology Reference No`, treatment = Treatment),
+  by = "subject"
+) # Obtaining treatment (monotherapy vs combination therapy) from clinical
+
+nonmelanoma_dist_pairwise_comb = nonmelanoma_dist_pairwise %>% filter(treatment == "combination anti-PD-1 + anti-CTLA-4")
+nonmelanoma_dist_pairwise_mono = nonmelanoma_dist_pairwise %>% filter(treatment == "anti-PD-1 monotherapy")
+
+## Combination classification
+invisible(capture.output(
+  nonmelanoma_dist_pairwise_comb_classification <- get_classification_spicy(no_folds = 4, no_repeats = 25,
+                                                                treatment = "combination", 
+                                                                combdata = nonmelanoma_dist_pairwise_comb, monodata = nonmelanoma_dist_pairwise_mono)
+))
+
+## Monotherapy classification
+invisible(capture.output(
+  nonmelanoma_dist_pairwise_mono_classification <- get_classification_spicy(no_folds = 4, no_repeats = 25,
+                                                                treatment = "monotherapy", 
+                                                                combdata = nonmelanoma_dist_pairwise_comb, monodata = nonmelanoma_dist_pairwise_mono)
+))
+
+
+
+## Combination plot data
+spicy_comb_plotdat = rbind(
+  
+  ## Density
+  rbind(
+    core_pairwise_comb_classification$training_balacc_p$data %>% cbind("region" = rep("core", nrow(.))), 
+    edge_pairwise_comb_classification$training_balacc_p$data %>% cbind("region" = rep("edge", nrow(.))), 
+    margin_pairwise_comb_classification$training_balacc_p$data %>% cbind("region" = rep("margin", nrow(.))), 
+    nonmelanoma_pairwise_comb_classification$training_balacc_p$data %>% cbind("region" = rep("nonmelanoma", nrow(.))),
+    full_pairwise_comb_classification$training_balacc_p$data %>% cbind("region" = rep("all", nrow(.)))
+  ) %>% cbind("calculation" = rep("Core by Density", nrow(.))),
+  
+  ## Distance
+  rbind(
+    core_dist_pairwise_comb_classification$training_balacc_p$data %>% cbind("region" = rep("core", nrow(.))), 
+    edge_dist_pairwise_comb_classification$training_balacc_p$data %>% cbind("region" = rep("edge", nrow(.))), 
+    margin_dist_pairwise_comb_classification$training_balacc_p$data %>% cbind("region" = rep("margin", nrow(.))), 
+    nonmelanoma_dist_pairwise_comb_classification$training_balacc_p$data %>% cbind("region" = rep("nonmelanoma", nrow(.))),
+    full_pairwise_comb_classification$training_balacc_p$data %>% cbind("region" = rep("all", nrow(.)))
+  ) %>% cbind("calculation" = rep("Core by Distance", nrow(.)))
+  
+)
+
+## Combination plot
+spicy_comb_training_balacc_p = spicy_comb_plotdat %>% 
+  ggplot() +
+  aes(x = region, y = value, fill = method) +
+  labs(x = "", y = "Balanced Accuracy", fill = "Model:") +
+       # title = "Combination Therapy: Model Balanced Accuracy on Training Data",
+       # subtitle = "4-fold repeated CV; n = 25, k = 4\n82 responders & 39 non-responders") +
+  scale_x_discrete(labels = c("Spatio-naive", "Core", "Edge", "Margin", "Non-melanoma")) +
+  scale_fill_discrete(labels = c("Logistic Regression", "Logistic Regression (Lasso)", "RandomForest", "SVM", "XGBoost")) +
+  facet_grid(rows = vars(calculation)) +
+  geom_boxplot() +
+  geom_hline(yintercept = 0.5, linetype = "dashed") +
+  theme_classic() +
+  theme(legend.position = "bottom",
+        plot.subtitle = element_text(hjust = 0.5),
+        plot.title = element_text(hjust = 0.5),
+        axis.text = element_text(size = 16),
+        axis.title = element_text(size = 20),
+        legend.text = element_text(size = 16),
+        legend.title = element_text(size = 16),
+        strip.text = element_text(size = 16))
+
+ggsave(filename = "figures/spicy_pairwise_modelaccuracy/spicy_combination_balacc.jpg", plot = spicy_comb_training_balacc_p,
+       width = 15, height = 7)
+
+
+
+## Monotherapy plot data
+spicy_mono_plotdat = rbind(
+  
+  ## Density
+  rbind(
+    core_pairwise_mono_classification$training_acc_p$data %>% cbind("region" = rep("core", nrow(.))), 
+    edge_pairwise_mono_classification$training_acc_p$data %>% cbind("region" = rep("edge", nrow(.))), 
+    margin_pairwise_mono_classification$training_acc_p$data %>% cbind("region" = rep("margin", nrow(.))), 
+    nonmelanoma_pairwise_mono_classification$training_acc_p$data %>% cbind("region" = rep("nonmelanoma", nrow(.))),
+    full_pairwise_mono_classification$training_acc_p$data %>% cbind("region" = rep("all", nrow(.)))
+  ) %>% cbind("calculation" = rep("Core by Density", nrow(.))),
+  
+  ## Distance
+  rbind(
+    core_dist_pairwise_mono_classification$training_acc_p$data %>% cbind("region" = rep("core", nrow(.))), 
+    edge_dist_pairwise_mono_classification$training_acc_p$data %>% cbind("region" = rep("edge", nrow(.))), 
+    margin_dist_pairwise_mono_classification$training_acc_p$data %>% cbind("region" = rep("margin", nrow(.))), 
+    nonmelanoma_dist_pairwise_mono_classification$training_acc_p$data %>% cbind("region" = rep("nonmelanoma", nrow(.))),
+    full_pairwise_mono_classification$training_balacc_p$data %>% cbind("region" = rep("all", nrow(.)))
+  ) %>% cbind("calculation" = rep("Core by Distance", nrow(.)))
+  
+)
+
+## Combination plot
+spicy_mono_training_acc_p = spicy_mono_plotdat %>% 
+  ggplot() +
+  aes(x = region, y = value, fill = method) +
+  labs(x = "", y = "Accuracy", fill = "Model:") +
+       # title = "Monotherapy: Model Accuracy on Training Data",
+       # subtitle = "4-fold repeated CV; n = 25, k = 4\n76 responders & 72 non-responders") +
+  scale_x_discrete(labels = c("Spatio-naive", "Core", "Edge", "Margin", "Non-melanoma")) +
+  scale_fill_discrete(labels = c("Logistic Regression", "Logistic Regression (Lasso)", "RandomForest", "SVM", "XGBoost")) +
+  facet_grid(rows = vars(calculation)) +
+  geom_boxplot() +
+  geom_hline(yintercept = 0.5, linetype = "dashed") +
+  theme_classic() +
+  theme(legend.position = "bottom",
+        plot.subtitle = element_text(hjust = 0.5),
+        plot.title = element_text(hjust = 0.5),
+        axis.text = element_text(size = 16),
+        axis.title = element_text(size = 20),
+        legend.text = element_text(size = 16),
+        legend.title = element_text(size = 16),
+        strip.text = element_text(size = 16))
+
+ggsave(filename = "figures/spicy_pairwise_modelaccuracy/spicy_monotherapy_acc.jpg", plot = spicy_mono_training_acc_p,
+       width = 15, height = 7)
+
+
+spicy_comb_training_balacc_p
+spicy_mono_training_acc_p
+```
+
+
+# Summary
+
+## Best models
+
+```{r best models}
+
+
+bestmodel_dat = rbind(
+  
+  ## Gene expression combination - limma100 xgboost
+  comb_limma100_training_acc$data %>% 
+    filter(method == "xgb") %>% 
+    cbind("label" = rep("Gene Expression\nCombination Therapy\nLimma top 100 genes", nrow(.)),
+          "treatment" = "Combination Therapy"),
+  
+  ## Gene expression monotherapy - limma100 xgboost
+  mono_limma100_training_acc$data %>% 
+    filter(method == "xgb") %>% 
+    cbind("label" = rep("Gene Expression\nMonotherapy\nLimma top 100 genes", nrow(.)),
+          "treatment" = "Monotherapy"),
+  
+  ## Naive cell proportion combination - randomforest
+  comb_training_balacc_p$data %>% 
+    filter(method == "rf") %>% 
+    cbind("label" = rep("Naive Cell Proportions\nCombination Therapy", nrow(.)),
+          "treatment" = "Combination Therapy"),
+  
+  ## Naive cell proportion monotherapy - logistic regression
+  mono_training_acc_p$data %>% 
+    filter(method == "glm") %>% 
+    cbind("label" = rep("Naive Cell Proportions\nMonotherapy", nrow(.)),
+          "treatment" = "Monotherapy"),
+  
+  ## Spatial cell proportion combination - edge density xgboost
+  comb_edge_classification$training_balacc_p$data %>% 
+    filter(method == "xgb") %>% 
+    cbind("label" = rep("Spatial Cell Proportions\nCombination Therapy", nrow(.)),
+          "treatment" = "Combination Therapy"),
+  
+  ## Spatial cell proportion monotherapy - margin density randomforest
+  mono_margin_classification$training_acc_p$data %>% 
+    filter(method == "rf") %>% 
+    cbind("label" = rep("Spatial Cell Proportions\nMonotherapy", nrow(.)),
+          "treatment" = "Monotherapy"),
+  
+  ## Cell associations combination - edge density randomforest
+  edge_pairwise_comb_classification$training_balacc_p$data %>% 
+    filter(method == "rf") %>% 
+    cbind("label" = rep("Pairwise Cell Associations\nCombination Therapy", nrow(.)),
+          "treatment" = "Combination Therapy"),
+  
+  ## Cell associations monotherapy - edge density randomforest
+  edge_pairwise_mono_classification$training_acc_p$data %>% 
+    filter(method == "rf") %>% 
+    cbind("label" = rep("Pairwise Cell Associations\nMonotherapy", nrow(.)),
+          "treatment" = "Monotherapy")
+)
+
+## Adding a row for "All" treatment
+bestmodel_dat = rbind(bestmodel_dat, bestmodel_dat %>% mutate(treatment = "All"))
+bestmodel_dat$label = factor(bestmodel_dat$label, levels = unique(bestmodel_dat$label))
+
+
+## Boxplot
+bestmodel_p = bestmodel_dat %>% 
+  ggplot() +
+  aes(x = label, y = value, fill = method) +
+  geom_boxplot(width = 0.5) +
+  labs(x = "", fill = "", y = "(Balanced) Accuracy") +
+  scale_fill_manual(values = c("#F8766D", "#00BF7D", "#E76BF3"),
+                    labels = c("Logistic Regression", "RandomForest", "XGBoost")) +
+  geom_hline(yintercept = 0.5, linetype = "dashed") +
+  geom_hline(yintercept = 0.63, linetype = "dashed", colour = "blue") +
+  geom_vline(xintercept = 4.5, colour = "black") +
+  facet_grid(rows = vars(treatment)) +
+  theme_classic() +
+  theme(legend.position = "bottom")
+
+ggsave(filename = "figures/best_models/bestmodels.jpg", plot = bestmodel_p,
+       width = 15, height = 7)
+```
