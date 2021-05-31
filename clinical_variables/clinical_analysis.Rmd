@@ -1,0 +1,77 @@
+---
+title: "clinical_analysis"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(dplyr)
+library(e1071)
+library(randomForest)
+library(xgboost)
+library(glmnet)
+```
+
+```{r reading data}
+
+## Reading clinical data
+clinical_variables = readxl::read_xlsx("Retrospective_Clinical data_Pathology_PIPresponse_22_4_21 (003).xlsx")
+
+## Selecting and renaming columns
+clinical_variables = clinical_variables %>%
+  select("patient" = "Pathology Reference No",
+         "response" = "Response",
+         "sex" = "Sex",
+         "age" = "Age(at start of treatment)",
+         "treatment" = "Treatment",
+         "therapy_line" = "Line of Therapy",
+         # "site" = "Primary melanoma site", # removed because there is not enough representation of all levels to be able to make predictions
+         "cutaneous_primary" = "Cutaneous primary (YES/NO)",
+         "previous_mapki" = "Previous MAPKi (Yes/No)",
+         "ldh" = "Baseline LDH",
+         "mstage" = "M Stage at Entry")
+
+## Obtaining only distinct observations
+clinical_variables = clinical_variables %>% dplyr::distinct()
+
+## Converting variables to factors
+clinical_variables$response = as.factor(clinical_variables$response)
+clinical_variables$sex = as.factor(clinical_variables$sex)
+clinical_variables$treatment = as.factor(clinical_variables$treatment)
+clinical_variables$therapy_line = as.factor(clinical_variables$therapy_line)
+# clinical_variables$site = as.factor(clinical_variables$site)
+clinical_variables$cutaneous_primary = as.factor(clinical_variables$cutaneous_primary)
+clinical_variables$previous_mapki = as.factor(clinical_variables$previous_mapki)
+clinical_variables$ldh = as.factor(clinical_variables$ldh)
+clinical_variables$mstage = as.factor(clinical_variables$mstage)
+```
+
+```{r defining classification function}
+
+source("functions/get_classification_clinical.R")
+```
+
+```{r fit classification models on clinical variables}
+
+## Combination therapy
+invisible(capture.output(
+  clinical_classification_comb <- get_classification_clinical(filter(clinical_variables, treatment == "PD1"),
+                                                              no_repeats = 20, no_folds = 5)
+))
+
+clinical_classification_comb$training_balacc_p
+ggsave(clinical_classification_comb$training_balacc_p, filename = "combination_clinical_balacc_p.jpg", width = 10, height = 7)
+
+
+## Monotherapy
+invisible(capture.output(
+  clinical_classification_mono <- get_classification_clinical(filter(clinical_variables, treatment == "PD1.IPI"),
+                                                              no_repeats = 20, no_folds = 5)
+))
+
+clinical_classification_mono$training_balacc_p
+ggsave(clinical_classification_mono$training_balacc_p, filename = "monotherapy_clinical_balacc_p.jpg", width = 10, height = 7)
+```
+
+
