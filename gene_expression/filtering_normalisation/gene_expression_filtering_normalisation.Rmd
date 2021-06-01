@@ -1,0 +1,138 @@
+---
+title: "Gene expression"
+author: "Alan"
+date: "21/01/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r reading data}
+
+library(edgeR)
+
+# Load raw count data 
+raw = read.delim("UPX_CLC_Counts.txt")
+data = DGEList(raw[,-1], genes = raw[,1])
+head(data$samples)
+```
+
+```{r filtering}
+
+## Average log counts per million
+AveLogCPM = aveLogCPM(data)
+hist(AveLogCPM, breaks = 100, main = 'PRE filter 50 samples')
+
+
+# Filtering based on CPM  >1 in at least 50 samples
+
+## Genes with more than 50 samples having greater than 1 CPM
+isexpr = rowSums(cpm(data) > 1) >= 50
+data = data[isexpr,]
+table(isexpr)
+dim(data)
+
+## Average log counts per million 
+AveLogCPM = aveLogCPM(data)
+hist(AveLogCPM, breaks = 100, main = 'POST filter 50 samples')
+```
+
+```{r normalisation}
+
+# TMM normalisation - trimmed mean of M values
+# (https://hbctraining.github.io/DGE_workshop/lessons/02_DGE_count_normalization.html)
+
+data = calcNormFactors(data, method = "TMM")
+head(data$samples)
+TMM50 = cpm(data)
+TMM50log = log(TMM50 + 1)
+
+## Visualisation
+boxplot(TMM50, outline=F, ylab="Gene count",
+        main="TMM50 raw counts", las=2, cex.axis=0.5)
+boxplot(TMM50log, outline=F, ylab="Gene count",
+        main="TMM50log", las=2, cex.axis=0.5)
+```
+
+```{r writing files}
+
+write.csv(TMM50, file = "TMM50.csv")
+write.csv(TMM50log, file = "TMM50log.csv")
+genelist = data$genes
+write.table(genelist, file = "genename_50.txt", quote=F, sep="\t", col.names=NA, row.names=TRUE)
+```
+
+
+```{r filtering for 100 samples}
+
+#Filtering based on CPM > 1 in at least 100 samples
+#Load raw count data 
+#EDGER based filtering and normalisation
+data = DGEList(raw[, -1], genes = raw[, 1])
+head(data$samples)
+
+#Filtering based on CPM  >1 in at least 100 samples
+AveLogCPM = aveLogCPM(data)
+hist(AveLogCPM, breaks = 100, main = 'PRE filter 100 samples')
+isexpr = rowSums(cpm(data) > 1) >= 100
+data = data[isexpr, ]
+table(isexpr)
+dim(data)
+AveLogCPM = aveLogCPM(data)
+hist(AveLogCPM, breaks = 100, main = 'POST filter 100 samples')
+
+#TMM normalisation
+data = calcNormFactors(data, method="TMM")
+head(data$samples)
+TMM100 = cpm(data)
+TMM100log = log(TMM100 + 1)
+boxplot(TMM100, outline=F, ylab="Gene count",
+        main="TMM100 raw counts", las=2, cex.axis=0.5)
+boxplot(TMM100log, outline=F, ylab="Gene count",
+        main="TMM100log", las=2, cex.axis=0.5)
+
+#write files
+write.csv(TMM100, file = "TMM100.csv")
+write.csv(TMM100log, file = "TMM100log.csv")
+genelist = data$genes
+write.table(genelist, file = "genename_100.txt", quote=F, sep="\t", col.names=NA, row.names=TRUE)
+```
+
+```{r filtering for 150 samples}
+
+#Filtering based on CPM  >1 in at least 150 samples
+#Load raw count data 
+#EDGER based filtering and normalisation
+data = DGEList(raw[,-1], genes = raw[,1])
+head(data$samples)
+
+#Filtering based on CPM  >1 in at least 150 samples
+AveLogCPM = aveLogCPM(data)
+hist(AveLogCPM, breaks = 150, main = 'PRE filter 150 samples')
+isexpr = rowSums(cpm(data) > 1) >= 150
+data = data[isexpr,]
+table(isexpr)
+dim(data)
+AveLogCPM = aveLogCPM(data)
+hist(AveLogCPM, breaks = 150, main = 'POST filter 150 samples')
+
+#TMM normalisation
+data = calcNormFactors(data, method="TMM")
+head(data$samples)
+TMM150 = cpm(data)
+TMM150log = log(TMM150 + 1)
+boxplot(TMM150, outline=F, ylab="Gene count",
+        main="TMM150 raw counts", las=2, cex.axis=0.5)
+boxplot(TMM150log, outline=F, ylab="Gene count",
+        main="TMM150log", las=2, cex.axis=0.5)
+
+#write files
+write.csv(TMM150, file = "TMM150.csv")
+write.csv(TMM150log, file = "TMM150log.csv")
+genelist = data$genes
+write.table(genelist, file = "genename_150.txt", quote=F, sep="\t", col.names=NA, row.names=TRUE)
+
+```
+

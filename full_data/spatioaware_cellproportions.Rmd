@@ -1,0 +1,2270 @@
+---
+title: "spatial_analysis"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+
+library(tidyverse) # General
+library(plyr) # General
+library(ggplot2) # General
+library(data.table) # General
+
+library(spatstat) # For image sectioning
+library(EBImage) # For image sectioning
+
+library(spicyR) # Spatial analysis
+```
+
+# Preparing data
+
+## Reading in barcode data
+
+```{r reformatting spicy friendly, eval = FALSE, echo = FALSE}
+
+# ## Reading data
+# b12_barcode = readRDS("rdata/b12_barcode.rds") %>%
+#   filter(imageid != "SP-15-016503") # Duplicated patient in b12 and b7 --> Tuba said to use b7
+# b34_barcode = readRDS("rdata/b34_barcode.rds")
+# b5_barcode = readRDS("rdata/b5_barcode.rds")
+# b6_barcode = readRDS("rdata/b6_barcode.rds")
+# b7_barcode = readRDS("rdata/b7_barcode.rds")
+# b89_barcode = readRDS("rdata/b89_barcode.rds")
+# 
+# 
+# ## Sourcing in function to get barcode names
+# source("functions/get_barcodename_fn.R")
+# 
+# ## Obtaining barcode names
+# barcodename_vec = unique(c(b12_barcode$celltype,
+#                            b34_barcode$celltype,
+#                            b5_barcode$celltype,
+#                            b6_barcode$celltype,
+#                            b7_barcode$celltype,
+#                            b89_barcode$celltype)) %>%
+#   sapply(get_barcodename) %>%
+#   setNames(unique(c(b12_barcode$celltype,
+#                     b34_barcode$celltype,
+#                     b5_barcode$celltype,
+#                     b6_barcode$celltype,
+#                     b7_barcode$celltype,
+#                     b89_barcode$celltype)), .) # Inverting names and values --> now barcode is value and description is name
+# 
+# dat_list = list(b12_barcode,
+#                 b34_barcode,
+#                 b5_barcode,
+#                 b6_barcode,
+#                 b7_barcode,
+#                 b89_barcode) %>%
+#   mclapply(function(x) x %>%
+#              mutate(
+#                description = names(barcodename_vec)[match(x$celltype, barcodename_vec)] # Replacing barcodes with names
+#                ),
+#            mc.cores = 20
+#            )
+# 
+# ## Selecting columns
+# dat_list = list(b12_barcode, b34_barcode, b5_barcode, b6_barcode, b7_barcode, b89_barcode) %>%
+#   lapply(function(x) x %>%
+#            select_if(!str_detect(colnames(.), "opal") & !str_detect(colnames(.), "dapi")) %>%
+#            dplyr::select(-`object id`)) # Removing all columns with "opal" or "dapi"
+# 
+# ## Binding rows
+# barcode_dat = bind_rows(dat_list)
+
+```
+
+## Creating descriptions from barcodes
+
+```{r creating descriptions from barcodes, eval = FALSE, echo = FALSE}
+
+# ## Sourcing barcodename function
+# source("functions/get_barcodename_fn.R")
+# 
+# ## Obtaining named vector containing descriptions of all unique barcodes
+# barcodename_vec = sapply(unique(barcode_dat$celltype), get_barcodename)
+# 
+# ## Changing celltype to factor and releveling
+# barcode_dat$celltype = as.factor(barcode_dat$celltype)
+# levels(barcode_dat$celltype) = barcodename_vec[match(levels(barcode_dat$celltype), names(barcodename_vec))] # Matching the current levels with barcodename_vec
+# # and obtaining corresponding description
+```
+
+## Image partitioning
+
+```{r image partitioning, eval = FALSE, echo = FALSE}
+
+# ## Sourcing in image partitioning function
+# source("functions/image_partition.R")
+# 
+# ## Demonstration of the function
+# image_partition(1, data = barcode_dat, show.plot = TRUE)
+# 
+# ## Obtaining new image IDs
+# 
+# ### Initialise vector to store new imageIDs
+# imageID_new = c()
+# 
+# ### Update values of vector with imageID_cluster
+# for(image_no in 1:length(unique(barcode_dat$imageid))){
+# 
+#   imageID_new = c(imageID_new,
+#                   paste0(unique(barcode_dat$imageid)[image_no], "_", image_partition(image_no, data = barcode_dat))
+#   )
+# }
+# 
+# # saveRDS(imageID_new, "rdata/imageID_new.rds")
+# imageID_new = readRDS("rdata/imageID_new.rds")
+# 
+# barcode_dat = barcode_dat %>%
+#   mutate(imageID = imageID_new)
+
+## Filtering out the cells that somehow didn't belong to any cluster (end with NA)
+# na_cluster_idx = str_detect(barcode_dat$imageID, "NA")
+# barcode_dat = barcode_dat[!(na_cluster_idx), ]
+```
+
+## Putting data in cellExp-friendly form 
+
+```{r tidying variable names and types, eval = FALSE, echo = FALSE}
+
+# ## Tidying data for SegmentedCells
+# barcode_dat$`classifier label` = as.factor(barcode_dat$`classifier label`) %>%
+#   plyr::revalue(c("Stoma" = "stroma",
+#             "Stroma" = "stroma",
+#             "Tumour" = "tumour")) # Fixing typos in classifier label column
+# 
+# barcode_dat = barcode_dat %>%
+#   dplyr::rename(oldID = imageid,
+#          cellType = celltype,
+#          shape_cellarea = `cell area (µm²)`,
+#          shape_cytoplasmarea = `cytoplasm area (µm²)`,
+#          shape_nucleusarea = `nucleus area (µm²)`,
+#          shape_nucleusperimeter = `nucleus perimeter (µm)`,
+#          shape_nucleusroundness = `nucleus roundness`,
+#          label = `classifier label`) # Renaming columns
+# 
+# ## Removing those images with only stroma and no tumour
+# image_nodata = barcode_dat %>%
+#   group_by(imageID, label, .drop = FALSE) %>%
+#   dplyr::summarise(count = n()) %>%
+#   filter(count == 0) %>%
+#   pull(unique(imageID))
+# 
+# barcode_dat = barcode_dat[!(barcode_dat$imageID %in% image_nodata), ]
+# 
+# saveRDS(barcode_dat, file = "rdata/barcode_dat.rds")
+barcode_dat = readRDS("rdata/barcode_dat.rds")
+
+# ## Subset of data - first 20 patients
+# unique_image = unique(barcode_dat$imageID)
+# 
+# subsetdata = barcode_dat %>%
+#   filter(imageID %in% unique_image[1:20])
+# 
+# saveRDS(subsetdata, "rdata/subsetdata.rds")
+subsetdata = readRDS("rdata/subsetdata.rds")
+```
+
+
+## Image sectioning
+
+```{r image sectioning}
+# source("functions/image_section.R")
+# source("functions/makeWindowSmall.R")
+# 
+# ## Initialising region to be all "edge" --> this will be updated to reflect actual region
+# barcode_dat = barcode_dat %>%
+#   mutate(region = rep("edge", nrow(barcode_dat))) %>%
+#   data.table()
+# 
+# 
+# 
+# ## Density method
+# 
+# ## Obtaining image sections
+# barcode_dat_section = lapply(1:length(unique(barcode_dat$imageID)), function(x) image_section(image_no = x, data = barcode_dat)) %>%
+#   bind_rows()
+# 
+# Obtaining and cleaning clinical data
+# clinical = readxl::read_xlsx("NewData/clinical.xlsx")
+# 
+# clinical_toexclude = clinical$`Comments/May want to exclude from analysis` %>%
+#   replace_na("none") %>%
+#   str_detect("Little melanoma|DAPI") # Removing all patients that have little melanoma or failed DAPI stain
+# 
+# clinical = clinical[!clinical_toexclude, ] %>%
+#   dplyr::select("oldID" = "Pathology Reference No",
+#          "response" = "Response",
+#          "treatment" = "Treatment")
+# 
+# ## Adding response from clinical data
+# barcode_dat_section = clinical %>%
+#   inner_join(barcode_dat_section, by = "oldID") # inner_join to contain all of the patients with both clinical and barcode data
+# ## Saving
+# saveRDS(barcode_dat_section, "rdata/barcode_dat_section.rds")
+barcode_dat_section = readRDS("rdata/barcode_dat_section.rds")
+# 
+# 
+# 
+# ## Distance method
+# 
+# ## Obtaining image sections
+# barcode_dat_section_dist = lapply(1:length(unique(barcode_dat$imageID)), 
+#                                   function(x) image_section(image_no = x, data = barcode_dat, core_use_density = FALSE)) %>%
+#   bind_rows()
+# 
+# ## Adding response from clinical data
+# barcode_dat_section_dist = clinical %>%
+#   inner_join(barcode_dat_section_dist, by = "oldID") # inner_join to contain all of the patients with both clinical and barcode data
+# ## Saving
+# saveRDS(barcode_dat_section_dist, "rdata/barcode_dat_section_dist.rds")
+barcode_dat_section_dist = readRDS("rdata/barcode_dat_section_dist.rds")
+
+cohortdat = clinical %>% 
+  select(Treatment, Response) %>% 
+  na.omit() 
+
+cohort_p = cohortdat %>% 
+  ggplot() +
+  aes(x = Treatment, fill = Response) +
+  labs(x = "", fill = "", y = "No. Patients") +
+  geom_text(mapping = aes(x = "anti-PD-1 monotherapy", 
+                          y = cohortdat %>% filter(Treatment == "anti-PD-1 monotherapy") %>% nrow() %>% `+`(5)),
+            label = paste0("n = ", (cohortdat %>% filter(Treatment == "anti-PD-1 monotherapy") %>% nrow()))) +
+  geom_text(mapping = aes(x = "combination anti-PD-1 + anti-CTLA-4", 
+                          y = cohortdat %>% filter(Treatment == "combination anti-PD-1 + anti-CTLA-4") %>% nrow() %>% `+`(5)),
+            label = paste0("n = ", (cohortdat %>% filter(Treatment == "combination anti-PD-1 + anti-CTLA-4") %>% nrow()))) +
+  geom_bar() +
+  theme_bw()
+
+ggsave(filename = "figures/cohort_p.jpeg", plot = cohort_p)
+```
+
+# Some plots to demonstrate generated data
+
+```{r}
+
+## Illustrating the processing method
+
+p1 = barcode_dat %>% filter(oldID == "SP-15-004437") %>% 
+  ggplot() +
+  aes(x = x, y = y, colour = label) +
+  labs(colour = "") +
+  geom_point(cex = 0.05)
+
+p2 = barcode_dat %>% filter(imageID == "SP-15-004437_2") %>% 
+  ggplot() +
+  aes(x = x, y = y, colour = label) +
+  labs(colour = "") +
+  geom_point(cex = 0.05)
+
+p3 = barcode_dat_section %>% filter(imageID == "SP-15-004437_2") %>% 
+  ggplot() +
+  aes(x = x, y = y, colour = region) +
+  labs(colour = "") +
+  geom_point(cex = 0.05)
+
+processing_p = ggpubr::ggarrange(p1, p2, p3, ncol = 3,
+                                 legend = "bottom")
+
+# ggsave("figures/processing_plots.jpg", plot = processing_p, width = 15, height = 7)
+
+
+## Comparing density and distance methods
+
+pp1 = barcode_dat_section %>% filter(imageID == unique(barcode_dat_section$imageID)[1]) %>% 
+  ggplot() +
+  aes(x = x, y = y, colour = region) +
+  labs(colour = "",
+       title = paste("Density: image", unique(barcode_dat_section$imageID)[1])) +
+  geom_point(cex = 0.05)
+
+pp2 = barcode_dat_section_dist %>% filter(imageID == unique(barcode_dat_section$imageID)[1]) %>% 
+  ggplot() +
+  aes(x = x, y = y, colour = region,
+      title = paste("Distance: image", unique(barcode_dat_section$imageID)[1])) +
+  labs(colour = "") +
+  geom_point(cex = 0.05)
+
+pp3 = barcode_dat_section %>% filter(imageID == unique(barcode_dat_section$imageID)[2]) %>% 
+  ggplot() +
+  aes(x = x, y = y, colour = region) +
+  labs(colour = "",
+       title = paste("Density: image", unique(barcode_dat_section$imageID)[2])) +
+  geom_point(cex = 0.05)
+
+pp4 = barcode_dat_section_dist %>% filter(imageID == unique(barcode_dat_section$imageID)[2]) %>% 
+  ggplot() +
+  aes(x = x, y = y, colour = region) +
+  labs(colour = "",
+       title = paste("Distance: image", unique(barcode_dat_section$imageID)[2])) +
+  geom_point(cex = 0.05)
+
+pp5 = barcode_dat_section %>% filter(imageID == unique(barcode_dat_section$imageID)[3]) %>% 
+  ggplot() +
+  aes(x = x, y = y, colour = region) +
+  labs(colour = "",
+       title = paste("Density: image", unique(barcode_dat_section$imageID)[3])) +
+  geom_point(cex = 0.05)
+
+pp6 = barcode_dat_section_dist %>% filter(imageID == unique(barcode_dat_section$imageID)[3]) %>% 
+  ggplot() +
+  aes(x = x, y = y, colour = region) +
+  labs(colour = "",
+       title = paste("Distance: image", unique(barcode_dat_section$imageID)[3])) +
+  geom_point(cex = 0.05)
+
+dens_dist_comp_p = ggpubr::ggarrange(pp1, pp2, 
+                                     pp3, pp4,
+                                     pp5, pp6,
+                                     ncol = 2, 
+                                     common.legend = TRUE, legend = "bottom")
+
+dens_dist_comp_p
+
+ggsave("figures/density_distance_comparison_plots1.jpg", plot = dens_dist_comp_p[[1]], width = 10, height = 7)
+ggsave("figures/density_distance_comparison_plots2.jpg", plot = dens_dist_comp_p[[2]], width = 10, height = 7)
+ggsave("figures/density_distance_comparison_plots3.jpg", plot = dens_dist_comp_p[[3]], width = 10, height = 7)
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Proportions Analysis by Region: Core by Density
+
+Note that the patients are split into those with combination anti-PD-1 + anti-CTLA-4 therapy; and those with anti-PD-1 monotherapy. We will be performing subsequent analysis on each group individually.
+
+```{r splitting by treatment DENSITY}
+
+# ## Combination
+# 
+# sectionprop_comb = barcode_dat_section %>% 
+#   filter(treatment == "combination anti-PD-1 + anti-CTLA-4") %>% 
+#   dplyr::select(-treatment) %>% 
+#   group_by(response, oldID, region, imageID, cellType, .drop = FALSE) %>%
+#   dplyr::summarise(count = n()) %>%
+#   ungroup() %>%
+#   group_by(imageID, .drop = FALSE) %>%
+#   mutate(prop = count/sum(count))
+# 
+# ## Adding batch data
+# sectionprop_comb = readRDS("rdata/barcodeprop_dat.rds") %>% 
+#   dplyr::select("oldID" = imageid,
+#                 "batch" = batch) %>% 
+#   right_join(sectionprop_comb,
+#              by = "oldID") %>% 
+#   dplyr::select(-oldID)
+# 
+# ## Converting to wide format
+# sectionprop_comb = sectionprop_comb %>% 
+#   pivot_wider(id_cols = c(1, 2, 3, 4),
+#               names_from = cellType,
+#               values_from = prop)
+# 
+# ## Changing response to factor
+# sectionprop_comb$response = as.factor(sectionprop_comb$response)
+# 
+# ## Saving
+# saveRDS(sectionprop_comb, file = "rdata/sectionprop_comb.rds")
+# sectionprop_comb = readRDS("rdata/sectionprop_comb.rds")
+
+
+# ## Monotherapy
+# 
+# sectionprop_mono = barcode_dat_section %>% 
+#   filter(treatment == "anti-PD-1 monotherapy") %>% 
+#   dplyr::select(-treatment) %>% 
+#   group_by(response, oldID, region, imageID, cellType, .drop = FALSE) %>%
+#   dplyr::summarise(count = n()) %>%
+#   ungroup() %>%
+#   group_by(imageID, .drop = FALSE) %>%
+#   mutate(prop = count/sum(count))
+# 
+# ## Adding batch data
+# sectionprop_mono = readRDS("rdata/barcodeprop_dat.rds") %>% 
+#   dplyr::select("oldID" = imageid,
+#                 "batch" = batch) %>% 
+#   right_join(sectionprop_mono,
+#              by = "oldID") %>% 
+#   dplyr::select(-oldID)
+# 
+# ## Converting to wide format
+# sectionprop_mono = sectionprop_mono %>% 
+#   pivot_wider(id_cols = c(1, 2, 3, 4),
+#               names_from = cellType,
+#               values_from = prop)
+# 
+# ## Changing response to factor
+# sectionprop_mono$response = as.factor(sectionprop_mono$response)
+# 
+# ## Saving
+# saveRDS(sectionprop_mono, file = "rdata/sectionprop_mono.rds")
+# sectionprop_mono = readRDS("rdata/sectionprop_mono.rds")
+```
+
+## Proportion Heatmap {.tabset}
+
+```{r heatmap by section function}
+
+source("functions/visualisation/get_heatmap_section.R")
+
+```
+
+### Combination
+
+```{r combination heatmaps DENSITY, fig.height = 10, fig.width = 10}
+
+get_heatmap_section(section = "core", treatment = "combination", 
+                    combdata = sectionprop_comb, monodata = sectionprop_mono)
+get_heatmap_section(section = "edge", treatment = "combination", 
+                    combdata = sectionprop_comb, monodata = sectionprop_mono)
+get_heatmap_section(section = "margin", treatment = "combination", 
+                    combdata = sectionprop_comb, monodata = sectionprop_mono)
+get_heatmap_section(section = "nonmelanoma", treatment = "combination", 
+                    combdata = sectionprop_comb, monodata = sectionprop_mono)
+```
+
+### Monotherapy
+
+```{r monotherapy heatmaps DENSITY, fig.height = 10, fig.width = 10}
+
+get_heatmap_section(section = "core", treatment = "monotherapy", 
+                    combdata = sectionprop_comb, monodata = sectionprop_mono)
+get_heatmap_section(section = "edge", treatment = "monotherapy", 
+                    combdata = sectionprop_comb, monodata = sectionprop_mono)
+get_heatmap_section(section = "margin", treatment = "monotherapy", 
+                    combdata = sectionprop_comb, monodata = sectionprop_mono)
+get_heatmap_section(section = "nonmelanoma", treatment = "monotherapy", 
+                    combdata = sectionprop_comb, monodata = sectionprop_mono)
+```
+
+## Proportion PCA {.tabset}
+
+```{r PCA by section function}
+
+source("functions/visualisation/get_PCA_section.R")
+
+```
+
+### Combination therapy
+
+```{r combination pca DENSITY}
+
+get_PCA_section(section = "core", treatment = "combination", 
+                combdata = sectionprop_comb, monodata = sectionprop_mono)
+get_PCA_section(section = "edge", treatment = "combination", 
+                combdata = sectionprop_comb, monodata = sectionprop_mono)
+get_PCA_section(section = "margin", treatment = "combination", 
+                combdata = sectionprop_comb, monodata = sectionprop_mono)
+get_PCA_section(section = "nonmelanoma", treatment = "combination", 
+                combdata = sectionprop_comb, monodata = sectionprop_mono)
+```
+
+There isn't much separation in the PCA plots.
+
+### Monotherapy
+
+```{r monotherapy pca DENSITY}
+
+get_PCA_section(section = "core", treatment = "monotherapy", 
+                combdata = sectionprop_comb, monodata = sectionprop_mono)
+get_PCA_section(section = "edge", treatment = "monotherapy", 
+                combdata = sectionprop_comb, monodata = sectionprop_mono)
+get_PCA_section(section = "margin", treatment = "monotherapy", 
+                combdata = sectionprop_comb, monodata = sectionprop_mono)
+get_PCA_section(section = "nonmelanoma", treatment = "monotherapy", 
+                combdata = sectionprop_comb, monodata = sectionprop_mono)
+```
+
+There isn't much separation in the PCA plots.
+
+## Cell type proportions $t$-SNE {.tabset}
+
+```{r tsne by section function}
+
+source("functions/visualisation/get_tsne_section.R")
+
+```
+
+### Combination therapy
+
+```{r combination tsne DENSITY, fig.height = 10, fig.width = 10}
+
+get_tsne_section(section = "core", treatment = "combination", 
+                 combdata = sectionprop_comb, monodata = sectionprop_mono)
+get_tsne_section(section = "edge", treatment = "combination", 
+                 combdata = sectionprop_comb, monodata = sectionprop_mono)
+get_tsne_section(section = "margin", treatment = "combination", 
+                 combdata = sectionprop_comb, monodata = sectionprop_mono)
+get_tsne_section(section = "nonmelanoma", treatment = "combination", 
+                 combdata = sectionprop_comb, monodata = sectionprop_mono)
+```
+
+There isn't much separation in the $t$-SNE plots either.
+
+### Monotherapy
+
+```{r monotherapy tsne DENSITY, fig.height = 10, fig.width = 10}
+
+get_tsne_section(section = "core", treatment = "monotherapy", 
+                 combdata = sectionprop_comb, monodata = sectionprop_mono)
+get_tsne_section(section = "edge", treatment = "monotherapy", 
+                 combdata = sectionprop_comb, monodata = sectionprop_mono)
+get_tsne_section(section = "margin", treatment = "monotherapy", 
+                 combdata = sectionprop_comb, monodata = sectionprop_mono)
+get_tsne_section(section = "nonmelanoma", treatment = "monotherapy", 
+                 combdata = sectionprop_comb, monodata = sectionprop_mono)
+```
+
+There isn't much separation in the $t$-SNE plots either.
+
+## Classification {.tabset}
+
+```{r classification by section function}
+
+source("functions/analysis/get_classification_section.R")
+
+```
+
+### Combination therapy
+
+```{r combination classification DENSITY}
+
+## Core
+
+invisible(capture.output(
+  comb_core_classification <- get_classification_section(no_folds = 5, no_repeats = 20,
+                                                         section = "core", treatment = "combination", 
+                                                         combdata = sectionprop_comb, monodata = sectionprop_mono)
+))
+
+comb_core_training_acc = comb_core_classification[["training_balacc_p"]]
+comb_core_training_acc = comb_core_training_acc +
+  labs(subtitle = paste0(comb_core_training_acc$labels$subtitle,
+                         "\nRegions calculated by density"))
+# ggsave("figures/combination_core_classification.jpeg", plot = comb_core_training_acc, height = 7, width = 10)
+
+
+## Edge
+
+invisible(capture.output(
+  comb_edge_classification <- get_classification_section(no_folds = 5, no_repeats = 20,
+                                                         section = "edge", treatment = "combination", 
+                                                         combdata = sectionprop_comb, monodata = sectionprop_mono)
+))
+
+comb_edge_training_acc = comb_edge_classification[["training_balacc_p"]]
+comb_edge_training_acc = comb_edge_training_acc +
+  labs(subtitle = paste0(comb_edge_training_acc$labels$subtitle,
+                         "\nRegions calculated by density"))
+# ggsave("figures/combination_edge_classification.jpeg", plot = comb_edge_training_acc, height = 7, width = 10)
+
+
+## Margin
+
+invisible(capture.output(
+  comb_margin_classification <- get_classification_section(no_folds = 5, no_repeats = 20,
+                                                           section = "margin", treatment = "combination", 
+                                                           combdata = sectionprop_comb, monodata = sectionprop_mono)
+))
+
+comb_margin_training_acc = comb_margin_classification[["training_balacc_p"]]
+comb_margin_training_acc = comb_margin_training_acc +
+  labs(subtitle = paste0(comb_margin_training_acc$labels$subtitle,
+                         "\nRegions calculated by density"))
+# ggsave("figures/combination_margin_classification.jpeg", plot = comb_margin_training_acc, height = 7, width = 10)
+
+
+## Nonmelanoma
+
+invisible(capture.output(
+  comb_nonmelanoma_classification <- get_classification_section(no_folds = 5, no_repeats = 20,
+                                                                section = "nonmelanoma", treatment = "combination", 
+                                                                combdata = sectionprop_comb, monodata = sectionprop_mono)
+))
+
+comb_nonmelanoma_training_acc = comb_nonmelanoma_classification[["training_balacc_p"]]
+comb_nonmelanoma_training_acc = comb_nonmelanoma_training_acc +
+  labs(subtitle = paste0(comb_nonmelanoma_training_acc$labels$subtitle,
+                         "\nRegions calculated by density"))
+# ggsave("figures/combination_nonmelanoma_classification.jpeg", plot = comb_nonmelanoma_training_acc, height = 7, width = 10)
+```
+
+
+### Monotherapy
+
+```{r monotherapy classification DENSITY}
+
+## Core
+
+invisible(capture.output(
+  mono_core_classification <- get_classification_section(no_folds = 5, no_repeats = 20,
+                                                         section = "core", treatment = "monotherapy", 
+                                                         combdata = sectionprop_comb, monodata = sectionprop_mono)
+))
+
+mono_core_training_acc = mono_core_classification[["training_acc_p"]]
+mono_core_training_acc = mono_core_training_acc +
+  labs(subtitle = paste0(mono_core_training_acc$labels$subtitle,
+                         "\nRegions calculated by density"))
+# ggsave("figures/monotherapy_core_classification.jpeg", plot = mono_core_training_acc, height = 7, width = 10)
+
+
+## Edge
+
+invisible(capture.output(
+  mono_edge_classification <- get_classification_section(no_folds = 5, no_repeats = 20,
+                                                         section = "edge", treatment = "monotherapy", 
+                                                         combdata = sectionprop_comb, monodata = sectionprop_mono)
+))
+
+mono_edge_training_acc = mono_edge_classification[["training_acc_p"]]
+mono_edge_training_acc = mono_edge_training_acc +
+  labs(subtitle = paste0(mono_edge_training_acc$labels$subtitle,
+                         "\nRegions calculated by density"))
+# ggsave("figures/monotherapy_edge_classification.jpeg", plot = mono_edge_training_acc, height = 7, width = 10)
+
+
+## Margin
+
+invisible(capture.output(
+  mono_margin_classification <- get_classification_section(no_folds = 5, no_repeats = 20,
+                                                           section = "margin", treatment = "monotherapy", 
+                                                           combdata = sectionprop_comb, monodata = sectionprop_mono)
+))
+
+mono_margin_training_acc = mono_margin_classification[["training_acc_p"]]
+mono_margin_training_acc = mono_margin_training_acc +
+  labs(subtitle = paste0(mono_margin_training_acc$labels$subtitle,
+                         "\nRegions calculated by density"))
+# ggsave("figures/monotherapy_margin_classification.jpeg", plot = mono_margin_training_acc, height = 7, width = 10)
+
+
+## Nonmelanoma
+
+invisible(capture.output(
+  mono_nonmelanoma_classification <- get_classification_section(no_folds = 5, no_repeats = 20,
+                                                                section = "nonmelanoma", treatment = "monotherapy", 
+                                                                combdata = sectionprop_comb, monodata = sectionprop_mono)
+))
+
+mono_nonmelanoma_training_acc = mono_nonmelanoma_classification[["training_acc_p"]]
+mono_nonmelanoma_training_acc = mono_nonmelanoma_training_acc +
+  labs(subtitle = paste0(mono_nonmelanoma_training_acc$labels$subtitle,
+                         "\nRegions calculated by density"))
+# ggsave("figures/monotherapy_nonmelanoma_classification.jpeg", plot = mono_nonmelanoma_training_acc, height = 7, width = 10)
+```
+
+
+## Testing {.tabset}
+
+Using a two-sample Hotelling's $t^2$ test with permutation (non-normally distributed data) and using Shaefer and Strimmer's James-Stein shrinkage estimator to calculate the sample covariance matrices.
+
+```{r hotelling and univariate test by section function}
+
+source("functions/analysis/get_hotelling_section.R")
+source("functions/analysis/get_t.test_section.R")
+
+```
+
+### Combination
+
+```{r combination hotellings 2-sample permutation test DENSITY}
+
+## Core
+
+# comb_core_multivariate = get_hotelling_section(section = "core", treatment = "combination",
+#                                                combdata = sectionprop_comb, monodata = sectionprop_mono,
+#                                                no_permutations = 10000)
+# save(comb_core_multivariate, file = "rdata/comb_core_multivariate.Rdata")
+load("rdata/comb_core_multivariate.Rdata")
+
+comb_core_multivariate_p = comb_core_multivariate[["hotelling_p"]]
+comb_core_multivariate_p = comb_core_multivariate_p +
+  labs(subtitle = paste0(comb_core_multivariate_p$labels$subtitle,
+                         "\nRegions calculated by density"))
+
+comb_core_multivariate_p
+# ggsave("figures/combination_core_multivariatetest.jpg", plot = comb_core_multivariate_p)
+
+# comb_core_t = get_t.test_section(section = "core", treatment = "combination", 
+#                                  combdata = sectionprop_comb, monodata = sectionprop_mono,
+#                                  no_permutations = 1000)
+# save(comb_core_t, file = "rdata/comb_core_t.Rdata")
+load("rdata/comb_core_t.Rdata")
+
+comb_core_sig = comb_core_t %>% sapply(function(x) x$pval) %>% sort() %>% 
+  `*`(sectionprop_comb %>% dplyr::select(-batch, -response, -region, -imageID) %>% colnames() %>% length()) %>%  # Bonferroni correction
+  .[{which(. < 0.05)}] # 0.05 significance threshold
+
+
+## Edge
+
+# comb_edge_multivariate = get_hotelling_section(section = "edge", treatment = "combination",
+#                                                combdata = sectionprop_comb, monodata = sectionprop_mono,
+#                                                no_permutations = 10000)
+# save(comb_edge_multivariate, file = "rdata/comb_edge_multivariate.Rdata")
+load("rdata/comb_edge_multivariate.Rdata")
+
+comb_edge_multivariate_p = comb_edge_multivariate[["hotelling_p"]]
+comb_edge_multivariate_p = comb_edge_multivariate_p +
+  labs(subtitle = paste0(comb_edge_multivariate_p$labels$subtitle,
+                         "\nRegions calculated by density"))
+
+comb_edge_multivariate_p
+# ggsave("figures/combination_edge_multivariatetest.jpg", plot = comb_edge_multivariate_p)
+
+# comb_edge_t = get_t.test_section(section = "edge", treatment = "combination", 
+#                                  combdata = sectionprop_comb, monodata = sectionprop_mono,
+#                                  no_permutations = 1000)
+# save(comb_edge_t, file = "rdata/comb_edge_t.Rdata")
+load("rdata/comb_edge_t.Rdata")
+
+comb_edge_sig = comb_edge_t %>% sapply(function(x) x$pval) %>% sort() %>% 
+  `*`(sectionprop_comb %>% dplyr::select(-batch, -response, -region, -imageID) %>% colnames() %>% length()) %>%  # Bonferroni correction
+  .[{which(. < 0.05)}] # 0.05 significance threshold
+
+
+## Margin
+
+# comb_margin_multivariate = get_hotelling_section(section = "margin", treatment = "combination",
+#                                                  combdata = sectionprop_comb, monodata = sectionprop_mono,
+#                                                  no_permutations = 10000)
+# save(comb_margin_multivariate, file = "rdata/comb_margin_multivariate.Rdata")
+load("rdata/comb_margin_multivariate.Rdata")
+
+comb_margin_multivariate_p = comb_margin_multivariate[["hotelling_p"]]
+comb_margin_multivariate_p = comb_margin_multivariate_p +
+  labs(subtitle = paste0(comb_margin_multivariate_p$labels$subtitle,
+                         "\nRegions calculated by density"))
+
+comb_margin_multivariate_p
+# ggsave("figures/combination_margin_multivariatetest.jpg", plot = comb_margin_multivariate_p)
+
+# comb_margin_t = get_t.test_section(section = "margin", treatment = "combination", 
+#                                    combdata = sectionprop_comb, monodata = sectionprop_mono,
+#                                    no_permutations = 1000)
+# save(comb_margin_t, file = "rdata/comb_margin_t.Rdata")
+load("rdata/comb_margin_t.Rdata")
+
+comb_margin_sig = comb_margin_t %>% sapply(function(x) x$pval) %>% sort() %>% 
+  `*`(sectionprop_comb %>% dplyr::select(-batch, -response, -region, -imageID) %>% colnames() %>% length()) %>%  # Bonferroni correction
+  .[{which(. < 0.05)}] # 0.05 significance threshold
+
+
+## Nonmelanoma
+
+# comb_nonmelanoma_multivariate = get_hotelling_section(section = "nonmelanoma", treatment = "combination",
+#                                                       combdata = sectionprop_comb, monodata = sectionprop_mono,
+#                                                       no_permutations = 10000)
+# save(comb_nonmelanoma_multivariate, file = "rdata/comb_nonmelanoma_multivariate.Rdata")
+load("rdata/comb_nonmelanoma_multivariate.Rdata")
+
+comb_nonmelanoma_multivariate_p = comb_nonmelanoma_multivariate[["hotelling_p"]]
+comb_nonmelanoma_multivariate_p = comb_nonmelanoma_multivariate_p +
+  labs(subtitle = paste0(comb_nonmelanoma_multivariate_p$labels$subtitle,
+                         "\nRegions calculated by density"))
+
+comb_nonmelanoma_multivariate_p
+# ggsave("figures/combination_nonmelanoma_multivariatetest.jpg", plot = comb_nonmelanoma_multivariate_p)
+
+
+# comb_nonmelanoma_t = get_t.test_section(section = "nonmelanoma", treatment = "combination", 
+#                                         combdata = sectionprop_comb, monodata = sectionprop_mono,
+#                                         no_permutations = 1000)
+# save(comb_nonmelanoma_t, file = "rdata/comb_nonmelanoma_t.Rdata")
+load("rdata/comb_nonmelanoma_t.Rdata")
+
+comb_nonmelanoma_sig = comb_nonmelanoma_t %>% sapply(function(x) x$pval) %>% sort() %>% 
+  `*`(sectionprop_comb %>% dplyr::select(-batch, -response, -region, -imageID) %>% colnames() %>% length()) %>%  # Bonferroni correction
+  .[{which(. < 0.05)}] # 0.05 significance threshold
+```
+
+
+
+
+### Monotherapy
+
+```{r monotherapy hotellings 2-sample permutation test DENSITY}
+
+## Core
+
+# mono_core_multivariate = get_hotelling_section(section = "core", treatment = "monotherapy",
+#                                                combdata = sectionprop_comb, monodata = sectionprop_mono,
+#                                                no_permutations = 10000)
+# save(mono_core_multivariate, file = "rdata/mono_core_multivariate.Rdata")
+load("rdata/mono_core_multivariate.Rdata")
+
+mono_core_multivariate_p = mono_core_multivariate[["hotelling_p"]]
+mono_core_multivariate_p = mono_core_multivariate_p +
+  labs(subtitle = paste0(mono_core_multivariate_p$labels$subtitle,
+                         "\nRegions calculated by density"))
+
+mono_core_multivariate_p
+# ggsave("figures/monotherapy_core_multivariatetest.jpg", plot = mono_core_multivariate_p)
+
+
+# mono_core_t = get_t.test_section(section = "core", treatment = "monotherapy", 
+#                                  combdata = sectionprop_comb, monodata = sectionprop_mono,
+#                                  no_permutations = 1000)
+# save(mono_core_t, file = "rdata/mono_core_t.Rdata")
+load("rdata/mono_core_t.Rdata")
+
+mono_core_sig = mono_core_t %>% sapply(function(x) x$pval) %>% sort() %>% 
+  `*`(sectionprop_mono %>% dplyr::select(-batch, -response, -region, -imageID) %>% colnames() %>% length()) %>%  # Bonferroni correction
+  .[{which(. < 0.05)}] # 0.05 significance threshold
+
+
+## Edge
+
+# mono_edge_multivariate = get_hotelling_section(section = "edge", treatment = "monotherapy",
+#                                                combdata = sectionprop_comb, monodata = sectionprop_mono,
+#                                                no_permutations = 10000)
+# save(mono_edge_multivariate, file = "rdata/mono_edge_multivariate.Rdata")
+load("rdata/mono_edge_multivariate.Rdata")
+
+mono_edge_multivariate_p = mono_edge_multivariate[["hotelling_p"]]
+mono_edge_multivariate_p = mono_edge_multivariate_p +
+  labs(subtitle = paste0(mono_edge_multivariate_p$labels$subtitle,
+                         "\nRegions calculated by density"))
+
+mono_edge_multivariate_p
+# ggsave("figures/monotherapy_edge_multivariatetest.jpg", plot = mono_edge_multivariate_p)
+
+# mono_edge_t = get_t.test_section(section = "edge", treatment = "monotherapy", 
+#                                  combdata = sectionprop_comb, monodata = sectionprop_mono,
+#                                  no_permutations = 1000)
+# save(mono_edge_t, file = "rdata/mono_edge_t.Rdata")
+load("rdata/mono_edge_t.Rdata")
+
+mono_edge_sig = mono_edge_t %>% sapply(function(x) x$pval) %>% sort() %>% 
+  `*`(sectionprop_mono %>% dplyr::select(-batch, -response, -region, -imageID) %>% colnames() %>% length()) %>%  # Bonferroni correction
+  .[{which(. < 0.05)}] # 0.05 significance threshold
+
+
+## Margin
+
+# mono_margin_multivariate = get_hotelling_section(section = "margin", treatment = "monotherapy",
+#                                                  combdata = sectionprop_comb, monodata = sectionprop_mono,
+#                                                  no_permutations = 10000)
+# save(mono_margin_multivariate, file = "rdata/mono_margin_multivariate.Rdata")
+load("rdata/mono_margin_multivariate.Rdata")
+
+mono_margin_multivariate_p = mono_margin_multivariate[["hotelling_p"]]
+mono_margin_multivariate_p = mono_margin_multivariate_p +
+  labs(subtitle = paste0(mono_margin_multivariate_p$labels$subtitle,
+                         "\nRegions calculated by density"))
+
+mono_margin_multivariate_p
+# ggsave("figures/monotherapy_margin_multivariatetest.jpg", plot = mono_margin_multivariate_p)
+
+# mono_margin_t = get_t.test_section(section = "margin", treatment = "monotherapy", 
+#                                    combdata = sectionprop_comb, monodata = sectionprop_mono,
+#                                    no_permutations = 1000)
+# save(mono_margin_t, file = "rdata/mono_margin_t.Rdata")
+load("rdata/mono_margin_t.Rdata")
+
+mono_margin_sig = mono_margin_t %>% sapply(function(x) x$pval) %>% sort() %>% 
+  `*`(sectionprop_mono %>% dplyr::select(-batch, -response, -region, -imageID) %>% colnames() %>% length()) %>%  # Bonferroni correction
+  .[{which(. < 0.05)}] # 0.05 significance threshold
+
+
+## Nonmelanoma
+
+# mono_nonmelanoma_multivariate = get_hotelling_section(section = "nonmelanoma", treatment = "monotherapy",
+#                                                       combdata = sectionprop_comb, monodata = sectionprop_mono,
+#                                                       no_permutations = 10000)
+# save(mono_nonmelanoma_multivariate, file = "rdata/mono_nonmelanoma_multivariate.Rdata")
+load("rdata/mono_nonmelanoma_multivariate.Rdata")
+
+mono_nonmelanoma_multivariate_p = mono_nonmelanoma_multivariate[["hotelling_p"]]
+mono_nonmelanoma_multivariate_p = mono_nonmelanoma_multivariate_p +
+  labs(subtitle = paste0(mono_nonmelanoma_multivariate_p$labels$subtitle,
+                         "\nRegions calculated by density"))
+
+mono_nonmelanoma_multivariate_p
+# ggsave("figures/monotherapy_nonmelanoma_multivariatetest.jpg", plot = mono_nonmelanoma_multivariate_p)
+
+# mono_nonmelanoma_t = get_t.test_section(section = "nonmelanoma", treatment = "monotherapy", 
+#                                         combdata = sectionprop_comb, monodata = sectionprop_mono,
+#                                         no_permutations = 1000)
+# save(mono_nonmelanoma_t, file = "rdata/mono_nonmelanoma_t.Rdata")
+load("rdata/mono_nonmelanoma_t.Rdata")
+
+mono_nonmelanoma_sig = mono_nonmelanoma_t %>% sapply(function(x) x$pval) %>% sort() %>% 
+  `*`(sectionprop_mono %>% dplyr::select(-batch, -response, -region, -imageID) %>% colnames() %>% length()) %>%  # Bonferroni correction
+  .[{which(. < 0.05)}] # 0.05 significance threshold
+```
+
+```{r significant celltypes DENSITY}
+
+## List of significant celltypes from univariate analysis
+
+list("comb_core_sig" = comb_core_sig,
+     "comb_edge_sig" = comb_edge_sig,
+     "comb_margin_sig" = comb_margin_sig,
+     "comb_nonmelanoma_sig" = comb_nonmelanoma_sig,
+     "mono_core_sig" = mono_core_sig,
+     "mono_edge_sig" = mono_edge_sig,
+     "mono_margin_sig" = mono_margin_sig,
+     "mono_nonmelanoma_sig" = mono_nonmelanoma_sig)
+
+
+## Monotherapy core plot
+
+mono_core_sig_p = sectionprop_mono %>% filter(region == "core") %>% 
+  ggplot() +
+  aes(x = response, fill = response) +
+  aes_string(y = paste0("`", names(mono_core_sig), "`")) +
+  geom_boxplot(alpha = 0.8) +
+  geom_jitter(width = 0.2, cex = 0.5, alpha = 0.8) +
+  labs(x = "", y = "Cell Proportion",
+       title = paste("Proportion of", names(mono_core_sig), "cells"),
+       subtitle = "Monotherapy; core region") +
+  coord_flip() +
+  theme_bw() +
+  theme(legend.position = "none",
+        plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5))
+# ggsave("figures/monotherapy_core_univariatetest1.jpg", plot = mono_core_sig_p, height = 7, width = 10)
+
+
+## Monotherapy edge plot
+
+mono_edge_sig_p = sectionprop_mono %>% filter(region == "edge") %>% 
+  ggplot() +
+  aes(x = response, fill = response) +
+  aes_string(y = paste0("`", names(mono_edge_sig), "`")) +
+  geom_boxplot(alpha = 0.8) +
+  geom_jitter(width = 0.2, cex = 0.5, alpha = 0.8) +
+  labs(x = "", y = "Cell Proportion",
+       title = paste("Proportion of", names(mono_edge_sig), "cells"),
+       subtitle = "Monotherapy; edge region") +
+  coord_flip() +
+  theme_bw() +
+  theme(legend.position = "none",
+        plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5))
+# ggsave("figures/monotherapy_edge_univariatetest1.jpg", plot = mono_edge_sig_p, height = 7, width = 10)
+
+
+## Monotherapy nonmelanoma plot 1
+
+mono_nonmelanoma_sig_p1 = sectionprop_mono %>% filter(region == "nonmelanoma") %>% 
+  ggplot() +
+  aes(x = response, fill = response) +
+  aes_string(y = paste0("`", names(mono_nonmelanoma_sig)[1], "`")) +
+  geom_boxplot(alpha = 0.8) +
+  geom_jitter(width = 0.2, cex = 0.5, alpha = 0.8) +
+  labs(x = "", y = "Cell Proportion",
+       title = paste("Proportion of", names(mono_nonmelanoma_sig)[1], "cells"),
+       subtitle = "Monotherapy; nonmelanoma region") +
+  coord_flip() +
+  theme_bw() +
+  theme(legend.position = "none",
+        plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5))
+# ggsave("figures/monotherapy_nonmelanoma_univariatetest1.jpg", plot = mono_nonmelanoma_sig_p1, height = 7, width = 10)
+
+
+## Monotherapy nonmelanoma plot 2
+
+mono_nonmelanoma_sig_p2 = sectionprop_mono %>% filter(region == "nonmelanoma") %>% 
+  ggplot() +
+  aes(x = response, fill = response) +
+  aes_string(y = paste0("`", names(mono_nonmelanoma_sig)[2], "`")) +
+  geom_boxplot(alpha = 0.8) +
+  geom_jitter(width = 0.2, cex = 0.5, alpha = 0.8) +
+  labs(x = "", y = "Cell Proportion",
+       title = paste("Proportion of", names(mono_nonmelanoma_sig)[2], "cells"),
+       subtitle = "Monotherapy; nonmelanoma region") +
+  coord_flip() +
+  theme_bw() +
+  theme(legend.position = "none",
+        plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5))
+# ggsave("figures/monotherapy_nonmelanoma_univariatetest2.jpg", plot = mono_nonmelanoma_sig_p2, height = 7, width = 10)
+
+
+## All plots
+
+mono_sig_all_p = ggpubr::ggarrange(mono_core_sig_p, mono_edge_sig_p,
+                                   mono_nonmelanoma_sig_p1, mono_nonmelanoma_sig_p2,
+                                   ncol = 2, common.legend = TRUE, legend = "bottom")
+```
+
+Results are as follows:
+
+- Significantly more cd8+ cytotoxic t-cell/cd16+cd68- non-macrophage cells in the core of responders
++ Might be worth checking if these cell types can be together
+- Significantly less sox10+ melanoma/cd68+ macrophage cells in the edge of responders
++ This could mean that melanoma and macrophage cells are closer together in the edge region of non-responders, hence their high misclassification rate as a single cell type
+- Significantly less cd68+ macrophage and cd68+pdl1+ macrophage in the non-melanoma region of responders
+
+# Overall proportion analysis using region
+
+```{r obtaining region_cellType column DENSITY}
+# sectionprop_all = barcode_dat_section %>% 
+#   mutate(
+#     region_cellType = (barcode_dat_section %>% 
+#       dplyr::select(region, cellType) %>% 
+#       apply(1, function(x) paste(x, collapse = "_")))
+#   )
+# sectionprop_all$region_cellType = as.factor(sectionprop_all$region_cellType)
+
+# saveRDS(sectionprop_all, file = "rdata/sectionprop_all.rds")
+sectionprop_all = readRDS("rdata/sectionprop_all.rds")
+```
+
+```{r splitting by treatment DENSITY}
+
+## Combination
+
+sectionprop_all_comb = sectionprop_all %>% 
+  filter(treatment == "combination anti-PD-1 + anti-CTLA-4") %>% 
+  dplyr::select(-treatment, -region, -cellType) %>% 
+  group_by(response, oldID, imageID, region_cellType, .drop = FALSE) %>%
+  dplyr::summarise(count = n()) %>%
+  ungroup() %>%
+  group_by(imageID, .drop = FALSE) %>%
+  mutate(prop = count/sum(count))
+
+## Adding batch data
+sectionprop_all_comb = readRDS("rdata/barcodeprop_dat.rds") %>% 
+  dplyr::select("oldID" = imageid,
+                "batch" = batch) %>% 
+  right_join(sectionprop_all_comb,
+             by = "oldID") %>% 
+  dplyr::select(-oldID)
+
+## Converting to wide format
+sectionprop_all_comb = sectionprop_all_comb %>% 
+  pivot_wider(id_cols = c(1, 2, 3),
+              names_from = region_cellType,
+              values_from = prop)
+
+
+## Monotherapy
+
+sectionprop_all_mono = sectionprop_all %>% 
+  filter(treatment == "anti-PD-1 monotherapy") %>% 
+  dplyr::select(-treatment, -region, -cellType) %>% 
+  group_by(response, oldID, imageID, region_cellType, .drop = FALSE) %>%
+  dplyr::summarise(count = n()) %>%
+  ungroup() %>%
+  group_by(imageID, .drop = FALSE) %>%
+  mutate(prop = count/sum(count))
+
+## Adding batch data
+sectionprop_all_mono = readRDS("rdata/barcodeprop_dat.rds") %>% 
+  dplyr::select("oldID" = imageid,
+                "batch" = batch) %>% 
+  right_join(sectionprop_all_mono,
+             by = "oldID") %>% 
+  dplyr::select(-oldID)
+
+## Converting to wide format
+sectionprop_all_mono = sectionprop_all_mono %>% 
+  pivot_wider(id_cols = c(1, 2, 3),
+              names_from = region_cellType,
+              values_from = prop)
+
+
+## Changing response to factor
+
+sectionprop_all_comb$response = as.factor(sectionprop_all_comb$response)
+sectionprop_all_mono$response = as.factor(sectionprop_all_mono$response)
+```
+
+## Proportion Heatmap {.tabset}
+
+```{r heatmap function}
+
+source("functions/visualisation/get_heatmap.R")
+
+```
+
+### Combination therapy
+
+```{r combination all heatmap DENSITY}
+
+combination_heatmap = get_heatmap(treatment = "combination", 
+                                  combdata = sectionprop_all_comb, monodata = sectionprop_all_mono,
+                                  allregion = TRUE)
+
+# ggsave("figures/combination_all_heatmap.jpg", plot = combination_heatmap[["dat_heat"]], height = 20, width = 20)
+```
+
+### Monotherapy
+
+```{r monotherapy all heatmap DENSITY}
+
+monotherapy_heatmap = get_heatmap(treatment = "monotherapy", 
+                                  combdata = sectionprop_all_comb, monodata = sectionprop_all_mono,
+                                  allregion = TRUE)
+
+# ggsave("figures/monotherapy_all_heatmap.jpg", plot = monotherapy_heatmap[["dat_heat"]], height = 20, width = 20)
+```
+
+## Proportion PCA {.tabset}
+
+```{r PCA function}
+
+source("functions/visualisation/get_PCA.R")
+
+```
+
+### Combination therapy
+
+```{r combination all pca DENSITY}
+
+get_PCA(treatment = "combination",
+        combdata = sectionprop_all_comb, monodata = sectionprop_all_mono)
+```
+
+There isn't much separation in the PCA plots.
+
+### Monotherapy
+
+```{r monotherapy pca DENSITY}
+
+get_PCA(treatment = "monotherapy",
+        combdata = sectionprop_all_comb, monodata = sectionprop_all_mono)
+```
+
+There isn't much separation in the PCA plots.
+
+## Cell type proportions $t$-SNE {.tabset}
+
+```{r tsne function}
+
+source("functions/visualisation/get_tsne.R")
+
+```
+
+### Combination therapy
+
+```{r combination all tsne DENSITY, fig.height = 10, fig.width = 10}
+
+get_tsne(treatment = "combination",
+         combdata = sectionprop_all_comb, monodata = sectionprop_all_mono)
+```
+
+There isn't much separation in the $t$-SNE plots either.
+
+### Monotherapy
+
+```{r monotherapy tsne DENSITY, fig.height = 10, fig.width = 10}
+
+get_tsne(treatment = "monotherapy",
+         combdata = sectionprop_all_comb, monodata = sectionprop_all_mono)
+```
+
+There isn't much separation in the $t$-SNE plots either.
+
+## Classification {.tabset}
+
+```{r classification function}
+
+source("functions/analysis/get_classification.R")
+
+```
+
+### Combination therapy
+
+```{r combination classification DENSITY}
+
+invisible(capture.output(
+  comb_all_classification <- get_classification(no_folds = 5, no_repeats = 20,
+                                                treatment = "combination", 
+                                                combdata = sectionprop_all_comb, monodata = sectionprop_all_mono)
+)) # Note there is a warning "Prediction from a rank-deficient fit may be misleading
+
+comb_all_training_acc = comb_all_classification[["training_balacc_p"]]
+comb_all_training_acc = comb_all_training_acc +
+  labs(subtitle = paste0(comb_all_training_acc$labels$subtitle,
+                         "\nRegions calculated by density"))
+# ggsave("figures/combination_all_classification.jpeg", plot = comb_all_training_acc, height = 7, width = 10)
+```
+
+
+### Monotherapy
+
+```{r monotherapy classification DENSITY}
+
+invisible(capture.output(
+  mono_all_classification <- get_classification(no_folds = 5, no_repeats = 20,
+                                                treatment = "monotherapy", 
+                                                combdata = sectionprop_all_comb, monodata = sectionprop_all_mono)
+)) # Note there is a warning "Prediction from a rank-deficient fit may be misleading
+
+mono_all_training_acc = mono_all_classification[["training_acc_p"]]
+mono_all_training_acc = mono_all_training_acc +
+  labs(subtitle = paste0(mono_all_training_acc$labels$subtitle,
+                         "\nRegions calculated by density"))
+# ggsave("figures/monotherapy_all_classification.jpeg", plot = mono_all_training_acc, height = 7, width = 10)
+```
+
+
+
+## Testing {.tabset}
+
+Using a two-sample Hotelling's $t^2$ test with permutation (non-normally distributed data) and using Shaefer and Strimmer's James-Stein shrinkage estimator to calculate the sample covariance matrices.
+
+```{r hotelling and univariate test function}
+
+source("functions/analysis/get_hotelling.R")
+source("functions/analysis/get_t.test.R")
+
+```
+
+### Combination
+
+```{r combination all hotellings 2-sample permutation test DENSITY}
+
+comb_all_multivariate = get_hotelling(treatment = "combination", 
+                                      combdata = sectionprop_all_comb, monodata = sectionprop_all_mono,
+                                      no_permutations = 10000)
+
+comb_all_multivariate_p = comb_all_multivariate[["hotelling_p"]]
+
+comb_all_multivariate_p
+# ggsave("figures/combination_all_multivariatetest.jpg", plot = comb_all_multivariate_p)
+
+comb_all_t = get_t.test(treatment = "combination", 
+                        combdata = sectionprop_all_comb, monodata = sectionprop_all_mono,
+                        no_permutations = 1000)
+
+comb_all_sig = comb_all_t %>% sapply(function(x) x$pval) %>% sort() %>% 
+  `*`(sectionprop_all_comb %>% dplyr::select(-batch, -response, -imageID) %>% colnames() %>% length()) %>%  # Bonferroni correction
+  .[{which(. < 0.05)}] # 0.05 significance threshold
+
+# ggsave("figures/combination_all_multivariatetest.jpg", plot = comb_all_multivar_p, height = 7, width = 10)
+```
+
+
+There was no significant difference between cell proportions in responders and non-responders (p = `r comb_all_multivariate[["proptest"]]$pval`).
+
+While not necessary, there were also no univariate significant differences between cell proportions in responders and non-responders.
+
+### Monotherapy
+
+```{r monotherapy all hotellings 2-sample permutation test DENSITY}
+
+mono_all_multivariate = get_hotelling(treatment = "monotherapy", 
+                                      combdata = sectionprop_all_comb, monodata = sectionprop_all_mono,
+                                      no_permutations = 10000)
+
+mono_all_multivariate_p = mono_all_multivariate[["hotelling_p"]]
+
+mono_all_multivariate_p
+# ggsave("figures/monotherapy_all_multivariatetest.jpg", plot = mono_all_multivariate_p, height = 7, width = 10)
+
+mono_all_t = get_t.test(treatment = "monotherapy", 
+                        combdata = sectionprop_all_comb, monodata = sectionprop_all_mono,
+                        no_permutations = 1000)
+
+mono_all_sig = mono_all_t %>% sapply(function(x) x$pval) %>% sort() %>% 
+  `*`(sectionprop_all_mono %>% dplyr::select(-batch, -response, -imageID) %>% colnames() %>% length()) %>%  # Bonferroni correction
+  .[{which(. < 0.05)}] # 0.05 significance threshold
+```
+
+There was a significant difference between cell proportions in responders and non-responders on anti-PD-1 monotherapy (p = `r mono_all_multivariate[["proptest"]]$pval`).
+
+We can perform post-hoc univariate permutation tests to see which celltype in particular has an effect
+
+```{r mono all univariate tests DENSITY}
+
+mono_all_univar1_p = sectionprop_all_mono %>% 
+  ggplot() +
+  aes(x = response, fill = response) +
+  aes_string(y = paste0("`", names(mono_all_sig)[1], "`")) +
+  geom_boxplot(alpha = 0.8) +
+  geom_jitter(width = 0.2, cex = 0.5, alpha = 0.8) +
+  labs(x = "", y = "Cell Proportion",
+       title = paste("Proportion of", names(mono_all_sig)[1], "cells"),
+       subtitle = "Monotherapy") +
+  coord_flip() +
+  theme_bw() +
+  theme(legend.position = "none",
+        plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5))
+# ggsave("figures/monotherapy_all_univariatetest_1.jpg", plot = mono_all_univar1_p, width = 10, height = 7)
+
+mono_all_univar2_p = sectionprop_all_mono %>% 
+  ggplot() +
+  aes(x = response, fill = response) +
+  aes_string(y = paste0("`", names(mono_all_sig)[2], "`")) +
+  geom_boxplot(alpha = 0.8) +
+  geom_jitter(width = 0.2, cex = 0.5, alpha = 0.8) +
+  labs(x = "", y = "Cell Proportion",
+       title = paste("Proportion of", names(mono_all_sig)[1], "cells"),
+       subtitle = "Monotherapy") +
+  coord_flip() +
+  theme_bw() +
+  theme(legend.position = "none",
+        plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5))
+# ggsave("figures/monotherapy_all_univariatetest_2.jpg", plot = mono_all_univar2_p, width = 10, height = 7)
+```
+
+The two significant celltypes were:
+
+- Cytotoxic t-cell (cd8+)/cd16+ non-macrophages (cd68-) in the core
+- Macrophage (cd68+) in the nonmelanoma
+
+
+
+################################################################################################################################
+
+################################################################################################################################
+
+################################################################################################################################
+
+################################################################################################################################
+
+################################################################################################################################
+
+################################################################################################################################
+
+################################################################################################################################
+
+################################################################################################################################
+
+################################################################################################################################
+
+################################################################################################################################
+
+################################################################################################################################
+
+################################################################################################################################
+
+################################################################################################################################
+
+################################################################################################################################
+
+################################################################################################################################
+
+################################################################################################################################
+
+################################################################################################################################
+
+################################################################################################################################
+
+################################################################################################################################
+
+################################################################################################################################
+
+################################################################################################################################
+
+################################################################################################################################
+
+################################################################################################################################
+
+################################################################################################################################
+
+
+
+# Proportions Analysis by Region: Core by Distance
+
+Note that the patients are split into those with combination anti-PD-1 + anti-CTLA-4 therapy; and those with anti-PD-1 monotherapy. We will be performing subsequent analysis on each group individually.
+
+```{r splitting by treatment DISTANCE}
+
+# ## Combination
+# 
+# sectionprop_comb_dist = barcode_dat_section_dist %>% 
+#   filter(treatment == "combination anti-PD-1 + anti-CTLA-4") %>% 
+#   dplyr::select(-treatment) %>% 
+#   group_by(response, oldID, region, imageID, cellType, .drop = FALSE) %>%
+#   dplyr::summarise(count = n()) %>%
+#   ungroup() %>%
+#   group_by(imageID, .drop = FALSE) %>%
+#   mutate(prop = count/sum(count))
+# 
+# ## Adding batch data
+# sectionprop_comb_dist = readRDS("rdata/barcodeprop_dat.rds") %>% 
+#   dplyr::select("oldID" = imageid,
+#                 "batch" = batch) %>% 
+#   right_join(sectionprop_comb_dist,
+#              by = "oldID") %>% 
+#   dplyr::select(-oldID)
+# 
+# ## Converting to wide format
+# sectionprop_comb_dist = sectionprop_comb_dist %>% 
+#   pivot_wider(id_cols = c(1, 2, 3, 4),
+#               names_from = cellType,
+#               values_from = prop)
+# 
+# ## Changing response to factor
+# sectionprop_comb_dist$response = as.factor(sectionprop_comb_dist$response)
+# 
+# ## Saving
+# saveRDS(sectionprop_comb_dist, file = "rdata/sectionprop_comb_dist.rds")
+sectionprop_comb_dist = readRDS("rdata/sectionprop_comb_dist.rds")
+
+
+# ## Monotherapy
+# 
+# sectionprop_mono_dist = barcode_dat_section_dist %>% 
+#   filter(treatment == "anti-PD-1 monotherapy") %>% 
+#   dplyr::select(-treatment) %>% 
+#   group_by(response, oldID, region, imageID, cellType, .drop = FALSE) %>%
+#   dplyr::summarise(count = n()) %>%
+#   ungroup() %>%
+#   group_by(imageID, .drop = FALSE) %>%
+#   mutate(prop = count/sum(count))
+# 
+# ## Adding batch data
+# sectionprop_mono_dist = readRDS("rdata/barcodeprop_dat.rds") %>% 
+#   dplyr::select("oldID" = imageid,
+#                 "batch" = batch) %>% 
+#   right_join(sectionprop_mono_dist,
+#              by = "oldID") %>% 
+#   dplyr::select(-oldID)
+# 
+# ## Converting to wide format
+# sectionprop_mono_dist = sectionprop_mono_dist %>% 
+#   pivot_wider(id_cols = c(1, 2, 3, 4),
+#               names_from = cellType,
+#               values_from = prop)
+# 
+# ## Changing response to factor
+# sectionprop_mono_dist$response = as.factor(sectionprop_mono_dist$response)
+# 
+# ## Saving
+# saveRDS(sectionprop_mono_dist, file = "rdata/sectionprop_mono_dist.rds")
+sectionprop_mono_dist = readRDS("rdata/sectionprop_mono_dist.rds")
+```
+
+## Proportion Heatmap {.tabset}
+
+### Combination
+
+```{r combination heatmaps DISTANCE, fig.height = 10, fig.width = 10}
+
+get_heatmap_section(section = "core", treatment = "combination", 
+                    combdata = sectionprop_comb_dist, monodata = sectionprop_mono_dist)
+get_heatmap_section(section = "edge", treatment = "combination", 
+                    combdata = sectionprop_comb_dist, monodata = sectionprop_mono_dist)
+get_heatmap_section(section = "margin", treatment = "combination", 
+                    combdata = sectionprop_comb_dist, monodata = sectionprop_mono_dist)
+get_heatmap_section(section = "nonmelanoma", treatment = "combination", 
+                    combdata = sectionprop_comb_dist, monodata = sectionprop_mono_dist)
+```
+
+### Monotherapy
+
+```{r monotherapy heatmaps DISTANCE, fig.height = 10, fig.width = 10}
+
+get_heatmap_section(section = "core", treatment = "monotherapy", 
+                    combdata = sectionprop_comb_dist, monodata = sectionprop_mono_dist)
+get_heatmap_section(section = "edge", treatment = "monotherapy", 
+                    combdata = sectionprop_comb_dist, monodata = sectionprop_mono_dist)
+get_heatmap_section(section = "margin", treatment = "monotherapy", 
+                    combdata = sectionprop_comb_dist, monodata = sectionprop_mono_dist)
+get_heatmap_section(section = "nonmelanoma", treatment = "monotherapy", 
+                    combdata = sectionprop_comb_dist, monodata = sectionprop_mono_dist)
+```
+
+## Proportion PCA {.tabset}
+
+### Combination therapy
+
+```{r combination pca DISTANCE}
+
+get_PCA_section(section = "core", treatment = "combination", 
+                combdata = sectionprop_comb_dist, monodata = sectionprop_mono_dist)
+get_PCA_section(section = "edge", treatment = "combination", 
+                combdata = sectionprop_comb_dist, monodata = sectionprop_mono_dist)
+get_PCA_section(section = "margin", treatment = "combination", 
+                combdata = sectionprop_comb_dist, monodata = sectionprop_mono_dist)
+get_PCA_section(section = "nonmelanoma", treatment = "combination", 
+                combdata = sectionprop_comb_dist, monodata = sectionprop_mono_dist)
+```
+
+There isn't much separation in the PCA plots.
+
+### Monotherapy
+
+```{r monotherapy pca DISTANCE}
+
+get_PCA_section(section = "core", treatment = "monotherapy", 
+                combdata = sectionprop_comb_dist, monodata = sectionprop_mono_dist)
+get_PCA_section(section = "edge", treatment = "monotherapy", 
+                combdata = sectionprop_comb_dist, monodata = sectionprop_mono_dist)
+get_PCA_section(section = "margin", treatment = "monotherapy", 
+                combdata = sectionprop_comb_dist, monodata = sectionprop_mono_dist)
+get_PCA_section(section = "nonmelanoma", treatment = "monotherapy", 
+                combdata = sectionprop_comb_dist, monodata = sectionprop_mono_dist)
+```
+
+There isn't much separation in the PCA plots.
+
+## Cell type proportions $t$-SNE {.tabset}
+
+### Combination therapy
+
+```{r combination tsne DISTANCE, fig.height = 10, fig.width = 10}
+
+get_tsne_section(section = "core", treatment = "combination", 
+                 combdata = sectionprop_comb_dist, monodata = sectionprop_mono_dist)
+get_tsne_section(section = "edge", treatment = "combination", 
+                 combdata = sectionprop_comb_dist, monodata = sectionprop_mono_dist)
+get_tsne_section(section = "margin", treatment = "combination", 
+                 combdata = sectionprop_comb_dist, monodata = sectionprop_mono_dist)
+get_tsne_section(section = "nonmelanoma", treatment = "combination", 
+                 combdata = sectionprop_comb_dist, monodata = sectionprop_mono_dist)
+```
+
+There isn't much separation in the $t$-SNE plots either.
+
+### Monotherapy
+
+```{r monotherapy tsne DISTANCE, fig.height = 10, fig.width = 10}
+
+get_tsne_section(section = "core", treatment = "monotherapy", 
+                 combdata = sectionprop_comb_dist, monodata = sectionprop_mono_dist)
+get_tsne_section(section = "edge", treatment = "monotherapy", 
+                 combdata = sectionprop_comb_dist, monodata = sectionprop_mono_dist)
+get_tsne_section(section = "margin", treatment = "monotherapy", 
+                 combdata = sectionprop_comb_dist, monodata = sectionprop_mono_dist)
+get_tsne_section(section = "nonmelanoma", treatment = "monotherapy", 
+                 combdata = sectionprop_comb_dist, monodata = sectionprop_mono_dist)
+```
+
+There isn't much separation in the $t$-SNE plots either.
+
+## Classification {.tabset}
+
+### Combination therapy
+
+```{r combination classification DISTANCE}
+
+## Core
+
+invisible(capture.output(
+  comb_core_classification_dist <- get_classification_section(no_folds = 5, no_repeats = 20,
+                                                              section = "core", treatment = "combination", 
+                                                              combdata = sectionprop_comb_dist, monodata = sectionprop_mono_dist)
+))
+
+comb_core_training_acc_dist = comb_core_classification_dist[["training_balacc_p"]]
+comb_core_training_acc_dist = comb_core_training_acc_dist +
+  labs(subtitle = paste0(comb_core_training_acc_dist$labels$subtitle,
+                         "\nRegions calculated by distance"))
+# ggsave("figures/combination_core_classification_distance.jpeg", plot = comb_core_training_acc_dist, height = 7, width = 10)
+
+
+## Edge
+
+invisible(capture.output(
+  comb_edge_classification_dist <- get_classification_section(no_folds = 5, no_repeats = 20,
+                                                              section = "edge", treatment = "combination", 
+                                                              combdata = sectionprop_comb_dist, monodata = sectionprop_mono_dist)
+))
+
+comb_edge_training_acc_dist = comb_edge_classification_dist[["training_balacc_p"]]
+comb_edge_training_acc_dist = comb_edge_training_acc_dist +
+  labs(subtitle = paste0(comb_edge_training_acc_dist$labels$subtitle,
+                         "\nRegions calculated by distance"))
+# ggsave("figures/combination_edge_classification_distance.jpeg", plot = comb_edge_training_acc_dist, height = 7, width = 10)
+
+
+## Margin
+
+invisible(capture.output(
+  comb_margin_classification_dist <- get_classification_section(no_folds = 5, no_repeats = 20,
+                                                                section = "margin", treatment = "combination", 
+                                                                combdata = sectionprop_comb_dist, monodata = sectionprop_mono_dist)
+))
+
+comb_margin_training_acc_dist = comb_margin_classification_dist[["training_balacc_p"]]
+comb_margin_training_acc_dist = comb_margin_training_acc_dist +
+  labs(subtitle = paste0(comb_margin_training_acc_dist$labels$subtitle,
+                         "\nRegions calculated by distance"))
+# ggsave("figures/combination_margin_classification_distance.jpeg", plot = comb_margin_training_acc_dist, height = 7, width = 10)
+
+
+## Nonmelanoma
+
+invisible(capture.output(
+  comb_nonmelanoma_classification_dist <- get_classification_section(no_folds = 5, no_repeats = 20,
+                                                                     section = "nonmelanoma", treatment = "combination", 
+                                                                     combdata = sectionprop_comb_dist, monodata = sectionprop_mono_dist)
+))
+
+comb_nonmelanoma_training_acc_dist = comb_nonmelanoma_classification_dist[["training_balacc_p"]]
+comb_nonmelanoma_classification_dist = comb_nonmelanoma_classification_dist +
+  labs(subtitle = paste0(comb_nonmelanoma_classification_dist$labels$subtitle,
+                         "\nRegions calculated by distance"))
+# ggsave("figures/combination_nonmelanoma_classification_distance.jpeg", plot = comb_nonmelanoma_training_acc_dist, height = 7, width = 10)
+```
+
+
+### Monotherapy
+
+```{r monotherapy classification DISTANCE}
+
+## Core
+
+invisible(capture.output(
+  mono_core_classification_dist <- get_classification_section(no_folds = 5, no_repeats = 20,
+                                                              section = "core", treatment = "monotherapy", 
+                                                              combdata = sectionprop_comb_dist, monodata = sectionprop_mono_dist)
+))
+
+mono_core_training_acc_dist = mono_core_classification_dist[["training_acc_p"]]
+mono_core_training_acc_dist = mono_core_training_acc_dist +
+  labs(subtitle = paste0(mono_core_training_acc_dist$labels$subtitle,
+                         "\nRegions calculated by distance"))
+# ggsave("figures/monotherapy_core_classification_distance.jpeg", plot = mono_core_training_acc_dist, height = 7, width = 10)
+
+
+## Edge
+
+invisible(capture.output(
+  mono_edge_classification_dist <- get_classification_section(no_folds = 5, no_repeats = 20,
+                                                              section = "edge", treatment = "monotherapy", 
+                                                              combdata = sectionprop_comb_dist, monodata = sectionprop_mono_dist)
+))
+
+mono_edge_training_acc_dist = mono_edge_classification_dist[["training_acc_p"]]
+mono_edge_training_acc_dist = mono_edge_training_acc_dist +
+  labs(subtitle = paste0(mono_edge_training_acc_dist$labels$subtitle,
+                         "\nRegions calculated by distance"))
+# ggsave("figures/monotherapy_edge_classification_distance.jpeg", plot = mono_edge_training_acc_dist, height = 7, width = 10)
+
+
+## Margin
+
+invisible(capture.output(
+  mono_margin_classification_dist <- get_classification_section(no_folds = 5, no_repeats = 20,
+                                                                section = "margin", treatment = "monotherapy", 
+                                                                combdata = sectionprop_comb_dist, monodata = sectionprop_mono_dist)
+))
+
+mono_margin_training_acc_dist = mono_margin_classification_dist[["training_acc_p"]]
+mono_margin_training_acc_dist = mono_margin_training_acc_dist +
+  labs(subtitle = paste0(mono_margin_training_acc_dist$labels$subtitle,
+                         "\nRegions calculated by distance"))
+# ggsave("figures/monotherapy_margin_classification_distance.jpeg", plot = mono_margin_training_acc_dist, height = 7, width = 10)
+
+
+## Nonmelanoma
+
+invisible(capture.output(
+  mono_nonmelanoma_classification_dist <- get_classification_section(no_folds = 5, no_repeats = 20,
+                                                                     section = "nonmelanoma", treatment = "monotherapy", 
+                                                                     combdata = sectionprop_comb_dist, monodata = sectionprop_mono_dist)
+))
+
+mono_nonmelanoma_training_acc_dist = mono_nonmelanoma_classification_dist[["training_acc_p"]]
+mono_nonmelanoma_training_acc_dist = mono_nonmelanoma_training_acc_dist +
+  labs(subtitle = paste0(mono_nonmelanoma_training_acc_dist$labels$subtitle,
+                         "\nRegions calculated by distance"))
+# ggsave("figures/monotherapy_nonmelanoma_classification_distance.jpeg", plot = mono_nonmelanoma_training_acc_dist, height = 7, width = 10)
+```
+
+
+## Testing {.tabset}
+
+Using a two-sample Hotelling's $t^2$ test with permutation (non-normally distributed data) and using Shaefer and Strimmer's James-Stein shrinkage estimator to calculate the sample covariance matrices.
+
+### Combination
+
+```{r combination hotellings 2-sample permutation test DISTANCE}
+
+## Core
+
+# comb_core_multivariate_dist = get_hotelling_section(section = "core", treatment = "combination",
+#                                                combdata = sectionprop_comb_dist, monodata = sectionprop_mono_dist,
+#                                                no_permutations = 10000)
+# save(comb_core_multivariate_dist, file = "rdata/comb_core_multivariate_dist.Rdata")
+load("rdata/comb_core_multivariate_dist.Rdata")
+
+comb_core_multivariate_dist_p = comb_core_multivariate_dist[["hotelling_p"]]
+comb_core_multivariate_dist_p = comb_core_multivariate_dist_p +
+  labs(subtitle = paste0(comb_core_multivariate_dist_p$labels$subtitle,
+                         "\nRegions calculated by distance"))
+
+comb_core_multivariate_dist_p
+# ggsave("figures/combination_core_multivariatetest_distance.jpg", plot = comb_core_multivariate_dist_p)
+
+# comb_core_t_dist = get_t.test_section(section = "core", treatment = "combination", 
+#                                  combdata = sectionprop_comb_dist, monodata = sectionprop_mono_dist,
+#                                  no_permutations = 1000)
+# save(comb_core_t_dist, file = "rdata/comb_core_t_dist.Rdata")
+load("rdata/comb_core_t_dist.Rdata")
+
+comb_core_sig_dist = comb_core_t_dist %>% sapply(function(x) x$pval) %>% sort() %>% 
+  `*`(sectionprop_comb_dist %>% dplyr::select(-batch, -response, -region, -imageID) %>% colnames() %>% length()) %>%  # Bonferroni correction
+  .[{which(. < 0.05)}] # 0.05 significance threshold
+
+
+## Edge
+
+# comb_edge_multivariate_dist = get_hotelling_section(section = "edge", treatment = "combination",
+#                                                combdata = sectionprop_comb_dist, monodata = sectionprop_mono_dist,
+#                                                no_permutations = 10000)
+# save(comb_edge_multivariate_dist, file = "rdata/comb_edge_multivariate_dist.Rdata")
+load("rdata/comb_edge_multivariate_dist.Rdata")
+
+comb_edge_multivariate_dist_p = comb_edge_multivariate_dist[["hotelling_p"]]
+
+comb_edge_multivariate_dist_p
+# ggsave("figures/combination_edge_multivariatetest_distance.jpg", plot = comb_edge_multivariate_dist_p)
+
+# comb_edge_t_dist = get_t.test_section(section = "edge", treatment = "combination", 
+#                                  combdata = sectionprop_comb_dist, monodata = sectionprop_mono_dist,
+#                                  no_permutations = 1000)
+# save(comb_edge_t_dist, file = "rdata/comb_edge_t_dist.Rdata")
+load("rdata/comb_edge_t_dist.Rdata")
+
+comb_edge_sig_dist = comb_edge_t_dist %>% sapply(function(x) x$pval) %>% sort() %>% 
+  `*`(sectionprop_comb_dist %>% dplyr::select(-batch, -response, -region, -imageID) %>% colnames() %>% length()) %>%  # Bonferroni correction
+  .[{which(. < 0.05)}] # 0.05 significance threshold
+
+
+## Margin
+
+# comb_margin_multivariate_dist = get_hotelling_section(section = "margin", treatment = "combination",
+#                                                  combdata = sectionprop_comb_dist, monodata = sectionprop_mono_dist,
+#                                                  no_permutations = 10000)
+# save(comb_margin_multivariate_dist, file = "rdata/comb_margin_multivariate_dist.Rdata")
+load("rdata/comb_margin_multivariate_dist.Rdata")
+
+comb_margin_multivariate_dist_p = comb_margin_multivariate_dist[["hotelling_p"]]
+
+comb_margin_multivariate_dist_p
+# ggsave("figures/combination_margin_multivariatetest_distance.jpg", plot = comb_margin_multivariate_dist_p)
+
+# comb_margin_t_dist = get_t.test_section(section = "margin", treatment = "combination", 
+#                                    combdata = sectionprop_comb_dist, monodata = sectionprop_mono_dist,
+#                                    no_permutations = 1000)
+# save(comb_margin_t_dist, file = "rdata/comb_margin_t_dist.Rdata")
+load("rdata/comb_margin_t_dist.Rdata")
+
+comb_margin_sig_dist = comb_margin_t_dist %>% sapply(function(x) x$pval) %>% sort() %>% 
+  `*`(sectionprop_comb_dist %>% dplyr::select(-batch, -response, -region, -imageID) %>% colnames() %>% length()) %>%  # Bonferroni correction
+  .[{which(. < 0.05)}] # 0.05 significance threshold
+
+
+## Nonmelanoma
+
+# comb_nonmelanoma_multivariate_dist = get_hotelling_section(section = "nonmelanoma", treatment = "combination",
+#                                                       combdata = sectionprop_comb_dist, monodata = sectionprop_mono_dist,
+#                                                       no_permutations = 10000)
+# save(comb_nonmelanoma_multivariate_dist, file = "rdata/comb_nonmelanoma_multivariate_dist.Rdata")
+load("rdata/comb_nonmelanoma_multivariate_dist.Rdata")
+
+comb_nonmelanoma_multivariate_dist_p = comb_nonmelanoma_multivariate_dist[["hotelling_p"]]
+
+comb_nonmelanoma_multivariate_dist_p
+# ggsave("figures/combination_nonmelanoma_multivariatetest_distance.jpg", plot = comb_nonmelanoma_multivariate_dist_p)
+
+
+# comb_nonmelanoma_t_dist = get_t.test_section(section = "nonmelanoma", treatment = "combination", 
+#                                         combdata = sectionprop_comb_dist, monodata = sectionprop_mono_dist,
+#                                         no_permutations = 1000)
+# save(comb_nonmelanoma_t_dist, file = "rdata/comb_nonmelanoma_t_dist.Rdata")
+load("rdata/comb_nonmelanoma_t_dist.Rdata")
+
+comb_nonmelanoma_sig_dist = comb_nonmelanoma_t_dist %>% sapply(function(x) x$pval) %>% sort() %>% 
+  `*`(sectionprop_comb_dist %>% dplyr::select(-batch, -response, -region, -imageID) %>% colnames() %>% length()) %>%  # Bonferroni correction
+  .[{which(. < 0.05)}] # 0.05 significance threshold
+```
+
+
+
+
+### Monotherapy
+
+```{r monotherapy hotellings 2-sample permutation test DISTANCE}
+
+## Core
+
+# mono_core_multivariate_dist = get_hotelling_section(section = "core", treatment = "monotherapy",
+#                                                combdata = sectionprop_comb_dist, monodata = sectionprop_mono_dist,
+#                                                no_permutations = 10000)
+# save(mono_core_multivariate_dist, file = "rdata/mono_core_multivariate_dist.Rdata")
+load("rdata/mono_core_multivariate_dist.Rdata")
+
+mono_core_multivariate_dist_p = mono_core_multivariate_dist[["hotelling_p"]]
+
+mono_core_multivariate_dist_p
+# ggsave("figures/monotherapy_core_multivariatetest_distance.jpg", plot = mono_core_multivariate_dist_p)
+
+
+# mono_core_t_dist = get_t.test_section(section = "core", treatment = "monotherapy", 
+#                                  combdata = sectionprop_comb_dist, monodata = sectionprop_mono_dist,
+#                                  no_permutations = 1000)
+# save(mono_core_t_dist, file = "rdata/mono_core_t_dist.Rdata")
+load("rdata/mono_core_t_dist.Rdata")
+
+mono_core_sig_dist = mono_core_t_dist %>% sapply(function(x) x$pval) %>% sort() %>% 
+  `*`(sectionprop_mono_dist %>% dplyr::select(-batch, -response, -region, -imageID) %>% colnames() %>% length()) %>%  # Bonferroni correction
+  .[{which(. < 0.05)}] # 0.05 significance threshold
+
+
+## Edge
+
+# mono_edge_multivariate_dist = get_hotelling_section(section = "edge", treatment = "monotherapy",
+#                                                combdata = sectionprop_comb_dist, monodata = sectionprop_mono_dist,
+#                                                no_permutations = 10000)
+# save(mono_edge_multivariate_dist, file = "rdata/mono_edge_multivariate_dist.Rdata")
+load("rdata/mono_edge_multivariate_dist.Rdata")
+
+mono_edge_multivariate_dist_p = mono_edge_multivariate_dist[["hotelling_p"]]
+
+mono_edge_multivariate_dist_p
+# ggsave("figures/monotherapy_edge_multivariatetest_distance.jpg", plot = mono_edge_multivariate_dist_p)
+
+# mono_edge_t_dist = get_t.test_section(section = "edge", treatment = "monotherapy", 
+#                                  combdata = sectionprop_comb_dist, monodata = sectionprop_mono_dist,
+#                                  no_permutations = 1000)
+# save(mono_edge_t_dist, file = "rdata/mono_edge_t_dist.Rdata")
+load("rdata/mono_edge_t_dist.Rdata")
+
+mono_edge_sig_dist = mono_edge_t_dist %>% sapply(function(x) x$pval) %>% sort() %>% 
+  `*`(sectionprop_mono_dist %>% dplyr::select(-batch, -response, -region, -imageID) %>% colnames() %>% length()) %>%  # Bonferroni correction
+  .[{which(. < 0.05)}] # 0.05 significance threshold
+
+
+## Margin
+
+# mono_margin_multivariate_dist = get_hotelling_section(section = "margin", treatment = "monotherapy",
+#                                                  combdata = sectionprop_comb_dist, monodata = sectionprop_mono_dist,
+#                                                  no_permutations = 10000)
+# save(mono_margin_multivariate_dist, file = "rdata/mono_margin_multivariate_dist.Rdata")
+load("rdata/mono_margin_multivariate_dist.Rdata")
+
+mono_margin_multivariate_dist_p = mono_margin_multivariate_dist[["hotelling_p"]]
+
+mono_margin_multivariate_dist_p
+# ggsave("figures/monotherapy_margin_multivariatetest_distance.jpg", plot = mono_margin_multivariate_dist_p)
+
+# mono_margin_t_dist = get_t.test_section(section = "margin", treatment = "monotherapy", 
+#                                    combdata = sectionprop_comb_dist, monodata = sectionprop_mono_dist,
+#                                    no_permutations = 1000)
+# save(mono_margin_t_dist, file = "rdata/mono_margin_t_dist.Rdata")
+load("rdata/mono_margin_t_dist.Rdata")
+
+mono_margin_sig_dist = mono_margin_t_dist %>% sapply(function(x) x$pval) %>% sort() %>% 
+  `*`(sectionprop_mono_dist %>% dplyr::select(-batch, -response, -region, -imageID) %>% colnames() %>% length()) %>%  # Bonferroni correction
+  .[{which(. < 0.05)}] # 0.05 significance threshold
+
+
+## Nonmelanoma
+
+# mono_nonmelanoma_multivariate_dist = get_hotelling_section(section = "nonmelanoma", treatment = "monotherapy",
+#                                                       combdata = sectionprop_comb_dist, monodata = sectionprop_mono_dist,
+#                                                       no_permutations = 10000)
+# save(mono_nonmelanoma_multivariate_dist, file = "rdata/mono_nonmelanoma_multivariate_dist.Rdata")
+load("rdata/mono_nonmelanoma_multivariate_dist.Rdata")
+
+mono_nonmelanoma_multivariate_dist_p = mono_nonmelanoma_multivariate_dist[["hotelling_p"]]
+
+mono_nonmelanoma_multivariate_dist_p
+# ggsave("figures/monotherapy_nonmelanoma_multivariatetest_distance.jpg", plot = mono_nonmelanoma_multivariate_dist_p)
+
+# mono_nonmelanoma_t_dist = get_t.test_section(section = "nonmelanoma", treatment = "monotherapy", 
+#                                         combdata = sectionprop_comb_dist, monodata = sectionprop_mono_dist,
+#                                         no_permutations = 1000)
+# save(mono_nonmelanoma_t_dist, file = "rdata/mono_nonmelanoma_t_dist.Rdata")
+load("rdata/mono_nonmelanoma_t_dist.Rdata")
+
+mono_nonmelanoma_sig_dist = mono_nonmelanoma_t_dist %>% sapply(function(x) x$pval) %>% sort() %>% 
+  `*`(sectionprop_mono_dist %>% dplyr::select(-batch, -response, -region, -imageID) %>% colnames() %>% length()) %>%  # Bonferroni correction
+  .[{which(. < 0.05)}] # 0.05 significance threshold
+```
+
+```{r significant celltypes DISTANCE}
+
+## List of significant celltypes from univariate analysis
+
+list("comb_core_sig_dist" = comb_core_sig_dist,
+     "comb_edge_sig_dist" = comb_edge_sig_dist,
+     "comb_margin_sig_dist" = comb_margin_sig_dist,
+     "comb_nonmelanoma_sig_dist" = comb_nonmelanoma_sig_dist,
+     "mono_core_sig_dist" = mono_core_sig_dist,
+     "mono_edge_sig_dist" = mono_edge_sig_dist,
+     "mono_margin_sig_dist" = mono_margin_sig_dist,
+     "mono_nonmelanoma_sig_dist" = mono_nonmelanoma_sig_dist)
+
+
+## Combination core plot
+
+comb_core_sig_dist_p = sectionprop_comb_dist %>% filter(region == "core") %>% 
+  ggplot() +
+  aes(x = response, fill = response) +
+  aes_string(y = paste0("`", names(comb_core_sig_dist), "`")) +
+  geom_boxplot(alpha = 0.8) +
+  geom_jitter(width = 0.2, cex = 0.5, alpha = 0.8) +
+  labs(x = "", y = "Cell Proportion",
+       title = paste("Proportion of", names(mono_core_sig_dist), "cells"),
+       subtitle = "Combination therapy; core region") +
+  coord_flip() +
+  theme_bw() +
+  theme(legend.position = "none",
+        plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5))
+# ggsave("figures/combination_core_univariatetest1_distance.jpg", plot = mono_core_sig_dist_p, height = 7, width = 10)
+
+
+## Monotherapy nonmelanoma plot 1
+
+mono_nonmelanoma_sig_dist_p1 = sectionprop_mono_dist %>% filter(region == "nonmelanoma") %>% 
+  ggplot() +
+  aes(x = response, fill = response) +
+  aes_string(y = paste0("`", names(mono_nonmelanoma_sig_dist)[1], "`")) +
+  geom_boxplot(alpha = 0.8) +
+  geom_jitter(width = 0.2, cex = 0.5, alpha = 0.8) +
+  labs(x = "", y = "Cell Proportion",
+       title = paste("Proportion of", names(mono_nonmelanoma_sig_dist)[1], "cells"),
+       subtitle = "Monotherapy; nonmelanoma region") +
+  coord_flip() +
+  theme_bw() +
+  theme(legend.position = "none",
+        plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5))
+# ggsave("figures/monotherapy_nonmelanoma_univariatetest1_distance.jpg", plot = mono_nonmelanoma_sig_dist_p1, height = 7, width = 10)
+
+
+## Monotherapy nonmelanoma plot 2
+
+mono_nonmelanoma_sig_dist_p2 = sectionprop_mono_dist %>% filter(region == "nonmelanoma") %>% 
+  ggplot() +
+  aes(x = response, fill = response) +
+  aes_string(y = paste0("`", names(mono_nonmelanoma_sig_dist)[2], "`")) +
+  geom_boxplot(alpha = 0.8) +
+  geom_jitter(width = 0.2, cex = 0.5, alpha = 0.8) +
+  labs(x = "", y = "Cell Proportion",
+       title = paste("Proportion of", names(mono_nonmelanoma_sig_dist)[2], "cells"),
+       subtitle = "Monotherapy; nonmelanoma region") +
+  coord_flip() +
+  theme_bw() +
+  theme(legend.position = "none",
+        plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5))
+# ggsave("figures/monotherapy_nonmelanoma_univariatetest2_distance.jpg", plot = mono_nonmelanoma_sig_dist_p2, height = 7, width = 10)
+
+
+## All plots
+
+sig_all_distance_p = ggpubr::ggarrange(comb_core_sig_dist_p, mono_nonmelanoma_sig_dist_p1, mono_nonmelanoma_sig_dist_p2,
+                                       ncol = 3, common.legend = TRUE, legend = "bottom")
+```
+
+Results are as follows:
+
+- Significantly more cd8+ cytotoxic t-cell/cd68+ macrophage cells in the core of combination therapy responders
+- Significantly less cd68+ macrophage cells in the nonmelanoma regions of monotherapy responders
+- Significantly less cd68+ macrophage/pd-l1 non-melanoma cells in the nonmelanoma regions of monotherapy responders
+
+# Overall proportion analysis using region
+
+```{r obtaining region_cellType column DISTANCE}
+# sectionprop_all_dist = barcode_dat_section_dist %>%
+#   mutate(
+#     region_cellType = (barcode_dat_section_dist %>%
+#       dplyr::select(region, cellType) %>%
+#       apply(1, function(x) paste(x, collapse = "_")))
+#   )
+# sectionprop_all_dist$region_cellType = as.factor(sectionprop_all_dist$region_cellType)
+# 
+# saveRDS(sectionprop_all_dist, file = "rdata/sectionprop_all_dist.rds")
+sectionprop_all_dist = readRDS("rdata/sectionprop_all_dist.rds")
+```
+
+```{r splitting by treatment DENSITY}
+
+## Combination
+
+sectionprop_all_dist_comb = sectionprop_all_dist %>% 
+  filter(treatment == "combination anti-PD-1 + anti-CTLA-4") %>% 
+  dplyr::select(-treatment, -region, -cellType) %>% 
+  group_by(response, oldID, imageID, region_cellType, .drop = FALSE) %>%
+  dplyr::summarise(count = n()) %>%
+  ungroup() %>%
+  group_by(imageID, .drop = FALSE) %>%
+  mutate(prop = count/sum(count))
+
+## Adding batch data
+sectionprop_all_dist_comb = readRDS("rdata/barcodeprop_dat.rds") %>% 
+  dplyr::select("oldID" = imageid,
+                "batch" = batch) %>% 
+  right_join(sectionprop_all_dist_comb,
+             by = "oldID") %>% 
+  dplyr::select(-oldID)
+
+## Converting to wide format
+sectionprop_all_dist_comb = sectionprop_all_dist_comb %>% 
+  pivot_wider(id_cols = c(1, 2, 3),
+              names_from = region_cellType,
+              values_from = prop)
+
+
+## Monotherapy
+
+sectionprop_all_dist_mono = sectionprop_all_dist %>% 
+  filter(treatment == "anti-PD-1 monotherapy") %>% 
+  dplyr::select(-treatment, -region, -cellType) %>% 
+  group_by(response, oldID, imageID, region_cellType, .drop = FALSE) %>%
+  dplyr::summarise(count = n()) %>%
+  ungroup() %>%
+  group_by(imageID, .drop = FALSE) %>%
+  mutate(prop = count/sum(count))
+
+## Adding batch data
+sectionprop_all_dist_mono = readRDS("rdata/barcodeprop_dat.rds") %>% 
+  dplyr::select("oldID" = imageid,
+                "batch" = batch) %>% 
+  right_join(sectionprop_all_dist_mono,
+             by = "oldID") %>% 
+  dplyr::select(-oldID)
+
+## Converting to wide format
+sectionprop_all_dist_mono = sectionprop_all_dist_mono %>% 
+  pivot_wider(id_cols = c(1, 2, 3),
+              names_from = region_cellType,
+              values_from = prop)
+
+
+## Changing response to factor
+
+sectionprop_all_dist_comb$response = as.factor(sectionprop_all_dist_comb$response)
+sectionprop_all_dist_mono$response = as.factor(sectionprop_all_dist_mono$response)
+```
+
+## Proportion Heatmap {.tabset}
+
+### Combination therapy
+
+```{r combination all heatmap DISTANCE}
+
+combination_heatmap_dist = get_heatmap(treatment = "combination", 
+                                       combdata = sectionprop_all_dist_comb, monodata = sectionprop_all_dist_mono,
+                                       allregion = TRUE)
+
+# ggsave("figures/combination_all_heatmap_distance.jpg", plot = combination_heatmap_dist[["dat_heat"]], height = 20, width = 20)
+```
+
+### Monotherapy
+
+```{r monotherapy all heatmap DISTANCE}
+
+monotherapy_heatmap_dist = get_heatmap(treatment = "monotherapy", 
+                                       combdata = sectionprop_all_dist_comb, monodata = sectionprop_all_dist_mono,
+                                       allregion = TRUE)
+
+# ggsave("figures/monotherapy_all_heatmap_distance.jpg", plot = monotherapy_heatmap_dist[["dat_heat"]], height = 20, width = 20)
+```
+
+## Proportion PCA {.tabset}
+
+### Combination therapy
+
+```{r combination all pca DISTANCE}
+
+get_PCA(treatment = "combination",
+        combdata = sectionprop_all_dist_comb, monodata = sectionprop_all_dist_mono)
+```
+
+There isn't much separation in the PCA plots.
+
+### Monotherapy
+
+```{r monotherapy pca DISTANCE}
+
+get_PCA(treatment = "monotherapy",
+        combdata = sectionprop_all_dist_comb, monodata = sectionprop_all_dist_mono)
+```
+
+There isn't much separation in the PCA plots.
+
+## Cell type proportions $t$-SNE {.tabset}
+
+### Combination therapy
+
+```{r combination all tsne DISTANCE, fig.height = 10, fig.width = 10}
+
+get_tsne(treatment = "combination",
+         combdata = sectionprop_all_dist_comb, monodata = sectionprop_all_dist_mono)
+```
+
+There isn't much separation in the $t$-SNE plots either.
+
+### Monotherapy
+
+```{r monotherapy tsne DISTANCE, fig.height = 10, fig.width = 10}
+
+get_tsne(treatment = "monotherapy",
+         combdata = sectionprop_all_dist_comb, monodata = sectionprop_all_dist_mono)
+```
+
+There isn't much separation in the $t$-SNE plots either.
+
+## Classification {.tabset}
+
+### Combination therapy
+
+```{r combination classification DISTANCE}
+
+invisible(capture.output(
+  comb_all_classification_dist <- get_classification(no_folds = 5, no_repeats = 20,
+                                                     treatment = "combination", 
+                                                     combdata = sectionprop_all_dist_comb, monodata = sectionprop_all_dist_mono)
+)) # Note there is a warning "Prediction from a rank-deficient fit may be misleading
+
+comb_all_training_acc_dist = comb_all_classification_dist[["training_balacc_p"]]
+comb_all_training_acc_dist = comb_all_training_acc_dist +
+  labs(subtitle = paste0(comb_all_training_acc_dist$labels$subtitle,
+                         "\nRegions calculated by distance"))
+# ggsave("figures/combination_all_classification_distance.jpeg", plot = comb_all_training_acc_dist, height = 7, width = 10)
+```
+
+
+### Monotherapy
+
+```{r monotherapy classification DISTANCE}
+
+invisible(capture.output(
+  mono_all_classification_dist <- get_classification(no_folds = 5, no_repeats = 20,
+                                                     treatment = "monotherapy", 
+                                                     combdata = sectionprop_all_dist_comb, monodata = sectionprop_all_dist_mono)
+)) # Note there is a warning "Prediction from a rank-deficient fit may be misleading
+
+mono_all_training_acc_dist = mono_all_classification_dist[["training_acc_p"]]
+mono_all_training_acc_dist = mono_all_training_acc_dist +
+  labs(subtitle = paste0(mono_all_training_acc_dist$labels$subtitle,
+                         "\nRegions calculated by distance"))
+# ggsave("figures/monotherapy_all_classification.jpeg", plot = mono_all_training_acc_dist, height = 7, width = 10)
+```
+
+
+
+## Testing {.tabset}
+
+Using a two-sample Hotelling's $t^2$ test with permutation (non-normally distributed data) and using Shaefer and Strimmer's James-Stein shrinkage estimator to calculate the sample covariance matrices.
+
+### Combination
+
+```{r combination all hotellings 2-sample permutation test DISTANCE}
+
+# comb_all_multivariate_dist = get_hotelling(treatment = "combination", 
+#                                       combdata = sectionprop_all_dist_comb, monodata = sectionprop_all_dist_mono,
+#                                       no_permutations = 10000)
+# save(comb_all_multivariate_dist, file = "rdata/comb_all_multivariate_dist.Rdata")
+load("rdata/comb_all_multivariate_dist.Rdata")
+
+comb_all_multivariate_dist_p = comb_all_multivariate_dist[["hotelling_p"]]
+
+comb_all_multivariate_dist_p
+# ggsave("figures/combination_all_multivariatetest_distance.jpg", plot = comb_all_multivariate_dist_p)
+
+# comb_all_t_dist = get_t.test(treatment = "combination", 
+#                         combdata = sectionprop_all_dist_comb, monodata = sectionprop_all_dist_mono,
+#                         no_permutations = 1000)
+# save(comb_all_t_dist, file = "rdata/comb_all_t_dist.Rdata")
+load("rdata/comb_all_t_dist.Rdata")
+
+comb_all_sig_dist = comb_all_t_dist %>% sapply(function(x) x$pval) %>% sort() %>% 
+  `*`(sectionprop_all_dist_comb %>% dplyr::select(-batch, -response, -imageID) %>% colnames() %>% length()) %>%  # Bonferroni correction
+  .[{which(. < 0.05)}] # 0.05 significance threshold
+
+# ggsave("figures/combination_all_multivariatetest_distance.jpg", plot = comb_all_multivariate_dist_p, height = 7, width = 10)
+```
+
+
+There was no significant difference between cell proportions in responders and non-responders (p = `r comb_all_multivariate_dist[["proptest"]]$pval`).
+
+There was also no univariate significant differences between cell proportions in responders and non-responders.
+
+### Monotherapy
+
+```{r monotherapy all hotellings 2-sample permutation test DISTANCE}
+
+# mono_all_multivariate_dist = get_hotelling(treatment = "monotherapy", 
+#                                       combdata = sectionprop_all_dist_comb, monodata = sectionprop_all_dist_mono,
+#                                       no_permutations = 10000)
+# save(mono_all_multivariate_dist, file = "rdata/mono_all_multivariate_dist.Rdata")
+load("rdata/mono_all_multivariate_dist.Rdata")
+
+mono_all_multivariate_dist_p = mono_all_multivariate_dist[["hotelling_p"]]
+
+mono_all_multivariate_dist_p
+# ggsave("figures/monotherapy_all_multivariatetest_distance.jpg", plot = mono_all_multivariate_dist_p, height = 7, width = 10)
+
+# mono_all_t_dist = get_t.test(treatment = "monotherapy", 
+#                         combdata = sectionprop_all_dist_comb, monodata = sectionprop_all_dist_mono,
+#                         no_permutations = 1000)
+# save(mono_all_t_dist, file = "rdata/mono_all_t_dist.Rdata")
+load("rdata/mono_all_t_dist.Rdata")
+
+mono_all_sig_dist = mono_all_t_dist %>% sapply(function(x) x$pval) %>% sort() %>% 
+  `*`(sectionprop_all_dist_mono %>% dplyr::select(-batch, -response, -imageID) %>% colnames() %>% length()) %>%  # Bonferroni correction
+  .[{which(. < 0.05)}] # 0.05 significance threshold
+```
+
+There was a significant difference between cell proportions in responders and non-responders on anti-PD-1 monotherapy (p = `r mono_all_multivariate_dist[["proptest"]]$pval`).
+
+We can perform post-hoc univariate permutation tests to see which celltype in particular has an effect
+
+```{r mono all univariate tests DISTANCE}
+
+mono_all_univar1_dist_p = sectionprop_all_dist_mono %>% 
+  ggplot() +
+  aes(x = response, fill = response) +
+  aes_string(y = paste0("`", names(mono_all_sig_dist)[1], "`")) +
+  geom_boxplot(alpha = 0.8) +
+  geom_jitter(width = 0.2, cex = 0.5, alpha = 0.8) +
+  labs(x = "", y = "Cell Proportion",
+       title = paste("Proportion of", names(mono_all_sig_dist)[1], "cells"),
+       subtitle = "Monotherapy") +
+  coord_flip() +
+  theme_bw() +
+  theme(legend.position = "none",
+        plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5))
+# ggsave("figures/monotherapy_all_univariatetest1_distance.jpg", plot = mono_all_univar1_dist_p, width = 10, height = 7)
+
+```
+
+cd68+ macrophage cells were significantly lower in nonmelanoma regions of monotherapy resonders.
+
+
+

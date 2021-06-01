@@ -1,0 +1,327 @@
+---
+title: "expression_analysis"
+subtitle: "Using genes with CPM > 1 in at least 100 patients"
+author: "Alan"
+date: "21/01/2021"
+output: 
+  html_document:
+    code_folding: show
+    theme: spacelab
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+## Loading libraries
+library(tidyverse)
+library(caret)
+# library(caretEnsemble)
+# library(e1071) # for SVM in caret
+library(MXM) # for gOMP feature selection
+library(randomForest)
+library(xgboost)
+library(limma)
+library(edgeR)
+```
+
+# Obtaining curated counts data
+
+```{r curated counts}
+
+## Reading data
+counts_raw = read.csv("filtering_normalisation/TMM150log.csv")
+genenames = read.delim("filtering_normalisation/genename_150.txt")
+
+## Transposing and removing identifier row
+counts_t = data.table::transpose(counts_raw[, -1])
+
+## Adding sample names as new column and gene names as column names
+colnames(counts_t) = genenames$genes
+counts_t = counts_t %>% 
+  mutate("sample" = colnames(counts_raw)[-1])
+
+## Adding clinical information (without Treatment)
+clinical = readxl::read_xlsx("March2020CLC/Clinical Data_RNA samples.xlsx")
+counts_t = counts_t %>% dplyr::left_join(clinical, by = c("sample" = "RNA_ID"))
+
+## Removing all those patients that do not have clinical information (i.e. unknown responder status)
+counts = counts_t[!is.na(counts_t$Response), ]
+
+## Making all variable names legal (previously issue with gene names containing "-" hyphens)
+names(counts) = make.names(names(counts))
+
+## Coercing response into a factor variable
+counts$Response = as.factor(counts$Response)
+```
+
+
+# Classifiers to predict patient repsonse
+
+## Data summary
+
+```{r number of patients}
+
+## A quick look at the data
+counts[1:5, 1:5]
+
+## Number of patients in data
+patient_num = unique(counts$sample) %>% length()
+paste("There are", patient_num, "patients in the data")
+
+## Class proportions in data
+table(counts$Response)
+paste("There are quite a few more responders than non-responders (class imbalance)")
+```
+
+```{r split data by treatment}
+
+## Combintation therapy
+counts_comb = counts %>% filter(Treatment == "anti-PD-1 + anti-CTLA-4")
+
+## Monotherapy
+counts_mono = counts %>% filter(Treatment == "anti-PD-1")
+```
+
+```{r get classification gene expression function}
+
+source("functions/get_classification_gene_expression.R")
+```
+
+
+```{r training models gOMP}
+
+# gOMP
+
+## Combination therapy
+invisible(capture.output(
+  comb_gomp_classification <- get_classification_gene_expression(no_folds = 5, no_repeats = 20,
+                                                                 treatment = "combination",
+                                                                 combdata = counts_comb, monodata = counts_mono,
+                                                                 method = "gomp")
+))
+
+comb_gomp_training_acc = comb_gomp_classification[["training_balacc_p"]]
+comb_gomp_training_acc = comb_gomp_training_acc +
+  labs(subtitle = paste0(comb_gomp_training_acc$labels$subtitle,
+                         "\ngOMP feature selection"))
+
+# save(comb_gomp_classification, file = "rdata/comb_gomp_classification.Rdata")
+# ggsave("figures/combination_gomp_classification.jpeg", plot = comb_gomp_training_acc, height = 7, width = 10)
+
+
+## Monotherapy
+invisible(capture.output(
+  mono_gomp_classification <- get_classification_gene_expression(no_folds = 5, no_repeats = 20,
+                                                                 treatment = "monotherapy",
+                                                                 combdata = counts_comb, monodata = counts_mono,
+                                                                 method = "gomp")
+))
+
+mono_gomp_training_acc = mono_gomp_classification[["training_acc_p"]]
+mono_gomp_training_acc = mono_gomp_training_acc +
+  labs(subtitle = paste0(mono_gomp_training_acc$labels$subtitle,
+                         "\ngOMP feature selection"))
+
+# save(mono_gomp_classification, file = "rdata/mono_gomp_classification.Rdata")
+# ggsave("figures/monotherapy_gomp_classification.jpeg", plot = mono_gomp_training_acc, height = 7, width = 10)
+
+comb_gomp_training_acc
+mono_gomp_training_acc
+```
+
+```{r training models limma100}
+
+# limma top 100
+
+## Combination therapy
+invisible(capture.output(
+  comb_limma100_classification <- get_classification_gene_expression(no_folds = 5, no_repeats = 20,
+                                                                     treatment = "combination",
+                                                                     combdata = counts_comb, monodata = counts_mono,
+                                                                     method = "limma100")
+))
+
+comb_limma100_training_acc = comb_limma100_classification[["training_balacc_p"]]
+comb_limma100_training_acc = comb_limma100_training_acc +
+  labs(subtitle = paste0(comb_limma100_training_acc$labels$subtitle,
+                         "\nlimma top 100 feature selection"))
+
+# save(comb_limma100_classification, file = "rdata/comb_limma100_classification.Rdata")
+# ggsave("figures/combination_limma100_classification.jpeg", plot = comb_limma100_training_acc, height = 7, width = 10)
+
+
+## Monotherapy
+invisible(capture.output(
+  mono_limma100_classification <- get_classification_gene_expression(no_folds = 5, no_repeats = 20,
+                                                                     treatment = "monotherapy",
+                                                                     combdata = counts_comb, monodata = counts_mono,
+                                                                     method = "limma100")
+))
+
+mono_limma100_training_acc = mono_limma100_classification[["training_acc_p"]]
+mono_limma100_training_acc = mono_limma100_training_acc +
+  labs(subtitle = paste0(mono_limma100_training_acc$labels$subtitle,
+                         "\nlimma top 100 feature selection"))
+
+# save(mono_limma100_classification, file = "rdata/mono_limma100_classification.Rdata")
+# ggsave("figures/monotherapy_limma100_classification.jpeg", plot = mono_limma100_training_acc, height = 7, width = 10)
+
+comb_limma100_training_acc
+mono_limma100_training_acc
+```
+
+```{r training models limma100}
+
+# limma top 20
+
+## Combination therapy
+invisible(capture.output(
+  comb_limma20_classification <- get_classification_gene_expression(no_folds = 5, no_repeats = 20,
+                                                                    treatment = "combination",
+                                                                    combdata = counts_comb, monodata = counts_mono,
+                                                                    method = "limma20")
+))
+
+comb_limma20_training_acc = comb_limma20_classification[["training_balacc_p"]]
+comb_limma20_training_acc = comb_limma20_training_acc +
+  labs(subtitle = paste0(comb_limma20_training_acc$labels$subtitle,
+                         "\nlimma top 20 feature selection"))
+
+# save(comb_limma20_classification, file = "rdata/comb_limma20_classification.Rdata")
+# ggsave("figures/combination_limma20_classification.jpeg", plot = comb_limma20_training_acc, height = 7, width = 10)
+
+
+## Monotherapy
+invisible(capture.output(
+  mono_limma20_classification <- get_classification_gene_expression(no_folds = 5, no_repeats = 20,
+                                                                    treatment = "monotherapy",
+                                                                    combdata = counts_comb, monodata = counts_mono,
+                                                                    method = "limma20")
+))
+
+mono_limma20_training_acc = mono_limma20_classification[["training_acc_p"]]
+mono_limma20_training_acc = mono_limma20_training_acc +
+  labs(subtitle = paste0(mono_limma20_training_acc$labels$subtitle,
+                         "\nlimma top 20 feature selection"))
+
+# save(mono_limma20_classification, file = "rdata/mono_limma20_classification.Rdata")
+# ggsave("figures/monotherapy_limma20_classification.jpeg", plot = mono_limma20_training_acc, height = 7, width = 10)
+
+comb_limma20_training_acc
+mono_limma20_training_acc
+```
+
+
+
+
+
+
+
+## Combining all plots
+
+```{r}
+
+combined_gene_expression_balacc = rbind(
+  comb_gomp_training_acc$data %>% cbind("feat" = rep("gomp", nrow(.)),
+                                        "treatment" = rep("Combination", nrow(.))),
+  mono_gomp_training_acc$data %>% cbind("feat" = rep("gomp", nrow(.)),
+                                        "treatment" = rep("Monotherapy", nrow(.))),
+  comb_limma100_training_acc$data %>% cbind("feat" = rep("limma100", nrow(.)),
+                                        "treatment" = rep("Combination", nrow(.))),
+  mono_limma100_training_acc$data %>% cbind("feat" = rep("limma100", nrow(.)),
+                                        "treatment" = rep("Monotherapy", nrow(.))),
+  mono_limma20_training_acc$data %>% cbind("feat" = rep("limma20", nrow(.)),
+                                        "treatment" = rep("Combination", nrow(.))),
+  comb_limma20_training_acc$data %>% cbind("feat" = rep("limma20", nrow(.)),
+                                        "treatment" = rep("Monotherapy", nrow(.)))
+) %>% 
+  ggplot() +
+  aes(x = feat, y = value, fill = method) +
+  labs(x = "", y = "Balanced Accuracy", fill = "Classification Method",
+       title = "Model (Balanced) Accuracy on Gene Expression",
+       subtitle = "5-fold repeated CV; n = 20, k = 5") +
+  scale_x_discrete(labels = c("gOMP", "Limma (top 100 genes)", "Limma (top 20 genes)")) +
+  scale_fill_discrete(labels = c("Logistic Regression", "RandomForest", "SVM", "XGBoost")) +
+  geom_boxplot() +
+  facet_grid(rows = vars(treatment)) +
+  geom_hline(yintercept = 0.5, linetype = "dashed") +
+  theme_classic() +
+  theme(legend.position = "bottom",
+        plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5))
+
+# ggsave(filename = "figures/combined_gene_expression_balacc.jpeg", plot = combined_gene_expression_balacc,
+#        width = 10, height = 7)
+```
+
+
+## Testing
+
+```{r get hotelling and t-test gene expression functions}
+
+source("functions/get_hotelling_gene_expression.R")
+source("functions/get_t.test_gene_expression.R")
+
+```
+
+```{r gene expression hotelling}
+
+## Combination therapy
+comb_gene_expression_multivariate = get_hotelling_gene_expression(treatment = "combination",
+                                               combdata = counts_comb, monodata = counts_mono,
+                                               no_permutations = 10000)
+comb_gene_expression_multivariate$hotelling_p$layers[[3]]$mapping$x = 2300
+save(comb_gene_expression_multivariate, file = "rdata/comb_gene_expression_multivariate.Rdata")
+load("rdata/comb_gene_expression_multivariate.Rdata")
+
+
+## Monotherapy
+mono_gene_expression_multivariate = get_hotelling_gene_expression(treatment = "monotherapy",
+                                               combdata = counts_comb, monodata = counts_mono,
+                                               no_permutations = 10000)
+save(mono_gene_expression_multivariate, file = "rdata/mono_gene_expression_multivariate.Rdata")
+load("rdata/mono_gene_expression_multivariate.Rdata")
+```
+
+```{r limma gene expression workflow}
+
+get_gene_significance = function(data){
+  
+  ## Obtaining data
+  response = factor(data$Response)
+  levels(response) = c("Nonresponder", "Responder")
+  counts = data %>% select(-Response, -sample, -Treatment)
+  
+  ## Obtaining model matrix and fitting
+  design = model.matrix(~ 0 + response)
+  fit = lmFit(t(counts), design)
+  
+  ## Obtaining contrast matrix and fitting
+  contrast_matrix = makeContrasts(responseNonresponder-responseResponder, levels = design)
+  fit_contrast = contrasts.fit(fit, contrast_matrix)
+  efit_contrasts = eBayes(fit_contrast)
+  
+  ## Obtaining histogram of p-values
+  pvalue_histogram = efit_contrasts$p.value[, 1] %>% as.data.frame() %>% 
+    ggplot() +
+    aes_string(x = ".") +
+    geom_histogram(fill = "grey", colour = "black", bins = 20) +
+    labs(x = "p-value", y = "Count", title = "Differential Gene Expression p-values\nResponders vs Non-Responders") +
+    theme_bw() +
+    theme(plot.title = element_text(hjust = 0.5))
+  
+  ## Obtaining list of top genes
+  topgenes = topTable(efit_contrasts, coef = 1, adjust.method = "bonferroni", n = 10, p.value = 1)
+  
+  return(list(pvalue_histogram, topgenes))
+}
+
+comb_gene_significance = get_gene_significance(counts_comb)
+mono_gene_significance = get_gene_significance(counts_mono)
+
+comb_gene_phist = comb_gene_significance[[1]]
+comb_gene_phist$labels$title = paste("Combination Therapy", comb_gene_phist$labels$title)
+
+mono_gene_phist = mono_gene_significance[[1]]
+mono_gene_phist$labels$title = paste("Monotherapy", mono_gene_phist$labels$title)
+```

@@ -61,7 +61,7 @@ invisible(capture.output(
 ))
 
 clinical_classification_comb$training_balacc_p
-ggsave(clinical_classification_comb$training_balacc_p, filename = "combination_clinical_balacc_p.jpg", width = 10, height = 7)
+ggsave(clinical_classification_comb$training_balacc_p, filename = "figures/combination_clinical_balacc_p.jpg", width = 10, height = 7)
 
 
 ## Monotherapy
@@ -71,7 +71,7 @@ invisible(capture.output(
 ))
 
 clinical_classification_mono$training_balacc_p
-ggsave(clinical_classification_mono$training_balacc_p, filename = "monotherapy_clinical_balacc_p.jpg", width = 10, height = 7)
+ggsave(clinical_classification_mono$training_balacc_p, filename = "figures/monotherapy_clinical_balacc_p.jpg", width = 10, height = 7)
 ```
 
 

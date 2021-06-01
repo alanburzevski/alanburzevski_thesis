@@ -1,0 +1,912 @@
+---
+title: "spicy_analysis"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(spicyR)
+```
+
+# Spicy on all sections
+
+```{r read barcode_dat}
+
+barcode_dat = readRDS("rdata/barcode_dat.rds")
+```
+
+## CellExp
+
+```{r}
+
+# barcode_dat = readRDS("rdata/barcode_dat.rds")
+# 
+# ## Renaming oldID to subject and changing imageID to integer representing unique images
+# barcode_dat = barcode_dat %>% dplyr::rename("subject" = "oldID") %>%
+#   mutate(imageID = as.numeric(as.factor(imageID)))
+# 
+# ## Removing duplicated points
+# barcode_dat = barcode_dat[
+#   barcode_dat %>% 
+#     select("imageID", "cellType", "x", "y") %>% 
+#     duplicated() %>% 
+#     `!`,
+# ]
+# 
+# 
+# ## Obtaining phenotype data
+# 
+# ## Filtering for only those patients with clinical information
+clinical = readxl::read_xlsx("NewData/clinical.xlsx") %>%
+  dplyr::select("subject" = "Pathology Reference No",
+                "condition" = "Response") # Reading clinical data
+# 
+# clinical$condition = as.factor(clinical$condition)
+# 
+# pheno = barcode_dat %>%
+#   dplyr::select(subject, imageID) %>%
+#   distinct() %>%
+#   left_join(clinical, by = "subject") %>%
+#   as.data.frame() # Joining to unique imageID in data
+# 
+# 
+# ## Creating SegmentedCells full object
+# 
+# cellExp = SegmentedCells(
+#   as.data.frame(barcode_dat %>% filter(subject %in% pheno$subject)),
+#   cellTypeString = "cellType",
+#   spatialCoords = c("x", "y"),
+#   morphologyString = "shape_",
+#   cellAnnotations = "label"
+# )
+# 
+# 
+# ## Without this spicy "will crash and burn with pheno data attached to the cell expression data" - Sourish Iyengar
+# imagePheno(cellExp) = pheno
+# save(cellExp, file = "rdata/cellExp.Rdata")
+load("rdata/cellExp.Rdata")
+```
+
+## Running spicy
+
+```{r running spicy}
+
+# spicy_full = spicy(cellExp, subject = "subject", condition = "condition",
+#                    nsim = 100,
+#                    BPPARAM = BiocParallel::MulticoreParam(workers = 50),
+#                    sigma = 50)
+
+# save(spicy_full, file = "rdata/spicy_full.Rdata")
+load("rdata/spicy_full.Rdata")
+
+# png("figures/spicy_full_heat.png", width = 30, height = 30, units = "cm", res = 1200)
+# 
+# spicy_full_heat = signifPlot(spicy_full)
+# 
+# dev.off()
+```
+
+## Looking at spicy object
+
+```{r}
+
+topPairs(spicy_full)
+```
+
+# Spicy by section - DENSITY
+
+```{r read barcode_dat_section DENSITY}
+
+# barcode_dat_section = readRDS("rdata/barcode_dat_section.rds")
+# 
+# ## Renaming oldID to subject and changing imageID to integer representing unique images
+# barcode_dat_section = barcode_dat_section %>% dplyr::rename("subject" = "oldID") %>%
+#   mutate(imageID = as.numeric(as.factor(imageID))) %>%
+#   select(-response, -treatment)
+# 
+# ## Removing duplicated points
+# barcode_dat_section = barcode_dat_section[
+#   barcode_dat_section %>%
+#     select("imageID", "cellType", "x", "y") %>%
+#     duplicated() %>%
+#     `!`,
+# ]
+```
+
+## Core
+
+```{r cellExp core DENSITY}
+
+# barcode_dat_core = barcode_dat_section %>%
+#   filter(region == "core") %>%
+#   select(-region)
+# 
+# 
+# ## Obtaining phenotype data
+# 
+# pheno_core = barcode_dat_core %>%
+#   dplyr::select(subject, imageID) %>%
+#   distinct() %>%
+#   left_join(clinical, by = "subject") %>%
+#   as.data.frame() # Joining to unique imageID in data
+# 
+# 
+# ## Creating SegmentedCells core object
+# 
+# cellExp_core = SegmentedCells(
+#   as.data.frame(barcode_dat_core %>% filter(subject %in% pheno_core$subject)),
+#   cellTypeString = "cellType",
+#   spatialCoords = c("x", "y"),
+#   morphologyString = "shape_",
+#   cellAnnotations = "label"
+# )
+# 
+# 
+# ## Without this spicy "will crash and burn with pheno data attached to the cell expression data" - Sourish Iyengar
+# imagePheno(cellExp_core) = pheno_core
+# save(cellExp_core, file = "rdata/cellExp_core.Rdata")
+load("rdata/cellExp_core.Rdata")
+```
+
+```{r running spicy core DENSITY}
+
+# spicy_core = spicy(cellExp_core, subject = "subject", condition = "condition",
+#                    nsim = 100,
+#                    BPPARAM = BiocParallel::MulticoreParam(workers = 50),
+#                    sigma = 50)
+# 
+# save(spicy_core, file = "rdata/spicy_core.Rdata")
+load("rdata/spicy_core.Rdata")
+
+# png("figures/spicy_core_heat.png", width = 30, height = 30, units = "cm", res = 1200)
+# 
+# spicy_core_heat = signifPlot(spicy_core)
+# 
+# dev.off()
+```
+
+## Edge
+
+```{r cellExp edge DENSITY}
+
+# barcode_dat_edge = barcode_dat_section %>%
+#   filter(region == "edge") %>%
+#   select(-region)
+# 
+# 
+# ## Obtaining phenotype data
+# 
+# pheno_edge = barcode_dat_edge %>%
+#   dplyr::select(subject, imageID) %>%
+#   distinct() %>%
+#   left_join(clinical, by = "subject") %>%
+#   as.data.frame() # Joining to unique imageID in data
+# 
+# 
+# ## Creating SegmentedCells edge object
+# 
+# cellExp_edge = SegmentedCells(
+#   as.data.frame(barcode_dat_edge %>% filter(subject %in% pheno_edge$subject)),
+#   cellTypeString = "cellType",
+#   spatialCoords = c("x", "y"),
+#   morphologyString = "shape_",
+#   cellAnnotations = "label"
+# )
+# 
+# 
+# ## Without this spicy "will crash and burn with pheno data attached to the cell expression data" - Sourish Iyengar
+# imagePheno(cellExp_edge) = pheno_edge
+# save(cellExp_edge, file = "rdata/cellExp_edge.Rdata")
+load("rdata/cellExp_edge.Rdata")
+```
+
+```{r running spicy edge DENSITY}
+
+# spicy_edge = spicy(cellExp_edge, subject = "subject", condition = "condition",
+#                    nsim = 100,
+#                    BPPARAM = BiocParallel::MulticoreParam(workers = 50),
+#                    sigma = 50)
+# 
+# save(spicy_edge, file = "rdata/spicy_edge.Rdata")
+load("rdata/spicy_edge.Rdata")
+
+# png("figures/spicy_edge_heat.png", width = 30, height = 30, units = "cm", res = 1200)
+# 
+# spicy_edge_heat = signifPlot(spicy_edge)
+# 
+# dev.off()
+```
+
+## Margin
+
+```{r cellExp margin DENSITY}
+
+# barcode_dat_margin = barcode_dat_section %>%
+#   filter(region == "margin") %>%
+#   select(-region)
+# 
+# 
+# ## Obtaining phenotype data
+# 
+# pheno_margin = barcode_dat_margin %>%
+#   dplyr::select(subject, imageID) %>%
+#   distinct() %>%
+#   left_join(clinical, by = "subject") %>%
+#   as.data.frame() # Joining to unique imageID in data
+# 
+# 
+# ## Creating SegmentedCells margin object
+# 
+# cellExp_margin = SegmentedCells(
+#   as.data.frame(barcode_dat_margin %>% filter(subject %in% pheno_margin$subject)),
+#   cellTypeString = "cellType",
+#   spatialCoords = c("x", "y"),
+#   morphologyString = "shape_",
+#   cellAnnotations = "label"
+# )
+# 
+# 
+# ## Without this spicy "will crash and burn with pheno data attached to the cell expression data" - Sourish Iyengar
+# imagePheno(cellExp_margin) = pheno_margin
+# save(cellExp_margin, file = "rdata/cellExp_margin.Rdata")
+load("rdata/cellExp_margin.Rdata")
+```
+
+```{r running spicy margin DENSITY}
+
+# spicy_margin = spicy(cellExp_margin, subject = "subject", condition = "condition",
+#                      nsim = 100,
+#                      BPPARAM = BiocParallel::MulticoreParam(workers = 50),
+#                      sigma = 50)
+# 
+# save(spicy_margin, file = "rdata/spicy_margin.Rdata")
+load("rdata/spicy_margin.Rdata")
+
+# png("figures/spicy_margin_heat.png", width = 30, height = 30, units = "cm", res = 1200)
+# 
+# spicy_margin_heat = signifPlot(spicy_margin)
+# 
+# dev.off()
+```
+
+## Nonmelanoma
+
+```{r cellExp nonmelanoma DENSITY}
+
+# barcode_dat_nonmelanoma = barcode_dat_section %>%
+#   filter(region == "nonmelanoma") %>%
+#   select(-region)
+# 
+# ## Removing imageID 252 because it only has a single nonmelanoma point
+# barcode_dat_nonmelanoma = barcode_dat_nonmelanoma %>%
+#   filter(imageID != "252")
+# 
+# 
+# ## Obtaining phenotype data
+# 
+# pheno_nonmelanoma = barcode_dat_nonmelanoma %>%
+#   dplyr::select(subject, imageID) %>%
+#   distinct() %>%
+#   left_join(clinical, by = "subject") %>%
+#   as.data.frame() # Joining to unique imageID in data
+# 
+# 
+# ## Creating SegmentedCells nonmelanoma object
+# 
+# cellExp_nonmelanoma = SegmentedCells(
+#   as.data.frame(barcode_dat_nonmelanoma %>% filter(subject %in% pheno_nonmelanoma$subject)),
+#   cellTypeString = "cellType",
+#   spatialCoords = c("x", "y"),
+#   morphologyString = "shape_",
+#   cellAnnotations = "label"
+# )
+# 
+# 
+# ## Without this spicy "will crash and burn with pheno data attached to the cell expression data" - Sourish Iyengar
+# imagePheno(cellExp_nonmelanoma) = pheno_nonmelanoma
+# save(cellExp_nonmelanoma, file = "rdata/cellExp_nonmelanoma.Rdata")
+load("rdata/cellExp_nonmelanoma.Rdata")
+```
+
+```{r running spicy nonmelanoma DENSITY}
+
+# spicy_nonmelanoma = spicy(cellExp_nonmelanoma, subject = "subject", condition = "condition",
+#                           nsim = 100,
+#                           BPPARAM = BiocParallel::MulticoreParam(workers = 50),
+#                           sigma = 50)
+# 
+# save(spicy_nonmelanoma, file = "rdata/spicy_nonmelanoma.Rdata")
+load("rdata/spicy_nonmelanoma.Rdata")
+
+
+# png("figures/spicy_nonmelanoma_heat.png", width = 30, height = 30, units = "cm", res = 1200)
+# 
+# spicy_nonmelanoma_heat = signifPlot(spicy_nonmelanoma)
+# 
+# dev.off()
+
+```
+
+
+
+
+# Spicy by section - DISTANCE
+
+```{r read barcode_dat_section DISTANCE}
+
+# barcode_dat_section_dist = readRDS("rdata/barcode_dat_section_dist.rds")
+# 
+# ## Renaming oldID to subject and changing imageID to integer representing unique images
+# barcode_dat_section_dist = barcode_dat_section_dist %>% dplyr::rename("subject" = "oldID") %>%
+#   mutate(imageID = as.numeric(as.factor(imageID))) %>%
+#   select(-response, -treatment)
+# 
+# ## Removing duplicated points
+# barcode_dat_section_dist = barcode_dat_section_dist[
+#   barcode_dat_section_dist %>%
+#     select("imageID", "cellType", "x", "y") %>%
+#     duplicated() %>%
+#     `!`,
+# ]
+```
+
+## Core
+
+```{r cellExp core DISTANCE}
+
+# barcode_dat_core_dist = barcode_dat_section_dist %>%
+#   filter(region == "core") %>%
+#   select(-region)
+# 
+# 
+# ## Obtaining phenotype data
+# 
+# pheno_core_dist = barcode_dat_core_dist %>%
+#   dplyr::select(subject, imageID) %>%
+#   distinct() %>%
+#   left_join(clinical, by = "subject") %>%
+#   as.data.frame() # Joining to unique imageID in data
+# 
+# 
+# ## Creating SegmentedCells core object
+# 
+# cellExp_core_dist = SegmentedCells(
+#   as.data.frame(barcode_dat_core_dist %>% filter(subject %in% pheno_core_dist$subject)),
+#   cellTypeString = "cellType",
+#   spatialCoords = c("x", "y"),
+#   morphologyString = "shape_",
+#   cellAnnotations = "label"
+# )
+# 
+# 
+# ## Without this spicy "will crash and burn with pheno data attached to the cell expression data" - Sourish Iyengar
+# imagePheno(cellExp_core_dist) = pheno_core_dist
+# save(cellExp_core_dist, file = "rdata/cellExp_core_dist.Rdata")
+load("rdata/cellExp_core_dist.Rdata")
+```
+
+```{r running spicy core DISTANCE}
+
+# spicy_core_dist = spicy(cellExp_core_dist, subject = "subject", condition = "condition",
+#                    nsim = 100,
+#                    BPPARAM = BiocParallel::MulticoreParam(workers = 50),
+#                    sigma = 50)
+# 
+# save(spicy_core_dist, file = "rdata/spicy_core_dist.Rdata")
+load("rdata/spicy_core_dist.Rdata")
+
+# png("figures/spicy_core_dist_heat.png", width = 30, height = 30, units = "cm", res = 1200)
+# 
+# spicy_core_dist_heat = signifPlot(spicy_core_dist)
+# 
+# dev.off()
+```
+
+## Edge
+
+```{r cellExp edge DISTANCE}
+
+# barcode_dat_edge_dist = barcode_dat_section_dist %>%
+#   filter(region == "edge") %>%
+#   select(-region)
+# 
+# 
+# ## Obtaining phenotype data
+# 
+# pheno_edge_dist = barcode_dat_edge_dist %>%
+#   dplyr::select(subject, imageID) %>%
+#   distinct() %>%
+#   left_join(clinical, by = "subject") %>%
+#   as.data.frame() # Joining to unique imageID in data
+# 
+# 
+# ## Creating SegmentedCells edge object
+# 
+# cellExp_edge_dist = SegmentedCells(
+#   as.data.frame(barcode_dat_edge_dist %>% filter(subject %in% pheno_edge_dist$subject)),
+#   cellTypeString = "cellType",
+#   spatialCoords = c("x", "y"),
+#   morphologyString = "shape_",
+#   cellAnnotations = "label"
+# )
+# 
+# 
+# ## Without this spicy "will crash and burn with pheno data attached to the cell expression data" - Sourish Iyengar
+# imagePheno(cellExp_edge_dist) = pheno_edge_dist
+# save(cellExp_edge_dist, file = "rdata/cellExp_edge_dist.Rdata")
+load("rdata/cellExp_edge_dist.Rdata")
+```
+
+```{r running spicy edge DISTANCE}
+
+# spicy_edge_dist = spicy(cellExp_edge_dist, subject = "subject", condition = "condition",
+#                    nsim = 100,
+#                    BPPARAM = BiocParallel::MulticoreParam(workers = 50),
+#                    sigma = 50)
+# 
+# save(spicy_edge_dist, file = "rdata/spicy_edge_dist.Rdata")
+load("rdata/spicy_edge_dist.Rdata")
+
+# png("figures/spicy_edge_dist_heat.png", width = 30, height = 30, units = "cm", res = 1200)
+# 
+# spicy_edge_dist_heat = signifPlot(spicy_edge_dist)
+# 
+# dev.off()
+```
+
+## Margin
+
+```{r cellExp margin DISTANCE}
+
+# barcode_dat_margin_dist = barcode_dat_section_dist %>%
+#   filter(region == "margin") %>%
+#   select(-region)
+# 
+# 
+# ## Obtaining phenotype data
+# 
+# pheno_margin_dist = barcode_dat_margin_dist %>%
+#   dplyr::select(subject, imageID) %>%
+#   distinct() %>%
+#   left_join(clinical, by = "subject") %>%
+#   as.data.frame() # Joining to unique imageID in data
+# 
+# 
+# ## Creating SegmentedCells margin object
+# 
+# cellExp_margin_dist = SegmentedCells(
+#   as.data.frame(barcode_dat_margin_dist %>% filter(subject %in% pheno_margin_dist$subject)),
+#   cellTypeString = "cellType",
+#   spatialCoords = c("x", "y"),
+#   morphologyString = "shape_",
+#   cellAnnotations = "label"
+# )
+# 
+# 
+# ## Without this spicy "will crash and burn with pheno data attached to the cell expression data" - Sourish Iyengar
+# imagePheno(cellExp_margin_dist) = pheno_margin_dist
+# save(cellExp_margin_dist, file = "rdata/cellExp_margin_dist.Rdata")
+load("rdata/cellExp_margin_dist.Rdata")
+```
+
+```{r running spicy margin DISTANCE}
+
+# spicy_margin_dist = spicy(cellExp_margin_dist, subject = "subject", condition = "condition",
+#                      nsim = 100,
+#                      BPPARAM = BiocParallel::MulticoreParam(workers = 50),
+#                      sigma = 50)
+# 
+# save(spicy_margin_dist, file = "rdata/spicy_margin_dist.Rdata")
+load("rdata/spicy_margin_dist.Rdata")
+
+# png("figures/spicy_margin_dist_heat.png", width = 30, height = 30, units = "cm", res = 1200)
+# 
+# spicy_margin_dist_heat = signifPlot(spicy_margin_dist)
+# 
+# dev.off()
+```
+
+## Nonmelanoma
+
+```{r cellExp nonmelanoma DISTANCE}
+
+# barcode_dat_nonmelanoma_dist = barcode_dat_section_dist %>%
+#   filter(region == "nonmelanoma") %>%
+#   select(-region)
+# 
+# ## Removing imageID 252 because it only has a single nonmelanoma point
+# barcode_dat_nonmelanoma_dist = barcode_dat_nonmelanoma_dist %>%
+#   filter(imageID != "252")
+# 
+# 
+# ## Obtaining phenotype data
+# 
+pheno_nonmelanoma_dist = barcode_dat_nonmelanoma_dist %>%
+  dplyr::select(subject, imageID) %>%
+  distinct() %>%
+  left_join(clinical, by = "subject") %>%
+  as.data.frame() # Joining to unique imageID in data
+# 
+# 
+# ## Creating SegmentedCells nonmelanoma object
+# 
+# cellExp_nonmelanoma_dist = SegmentedCells(
+#   as.data.frame(barcode_dat_nonmelanoma_dist %>% filter(subject %in% pheno_nonmelanoma_dist$subject)),
+#   cellTypeString = "cellType",
+#   spatialCoords = c("x", "y"),
+#   morphologyString = "shape_",
+#   cellAnnotations = "label"
+# )
+# 
+# 
+# ## Without this spicy "will crash and burn with pheno data attached to the cell expression data" - Sourish Iyengar
+# imagePheno(cellExp_nonmelanoma_dist) = pheno_nonmelanoma_dist
+# save(cellExp_nonmelanoma_dist, file = "rdata/cellExp_nonmelanoma_dist.Rdata")
+load("rdata/cellExp_nonmelanoma_dist.Rdata")
+```
+
+```{r running spicy nonmelanoma DISTANCE}
+
+# spicy_nonmelanoma_dist = spicy(cellExp_nonmelanoma_dist, subject = "subject", condition = "condition",
+#                           nsim = 100,
+#                           BPPARAM = BiocParallel::MulticoreParam(workers = 50),
+#                           sigma = 50)
+# 
+# save(spicy_nonmelanoma_dist, file = "rdata/spicy_nonmelanoma_dist.Rdata")
+load("rdata/spicy_nonmelanoma_dist.Rdata")
+
+
+# png("figures/spicy_nonmelanoma_dist_heat.png", width = 30, height = 30, units = "cm", res = 1200)
+# 
+# spicy_nonmelanoma_dist_heat = signifPlot(spicy_nonmelanoma_dist)
+# 
+# dev.off()
+
+```
+
+
+
+# Spicy Pairwise Associations Classification
+
+```{r function for classification of pairwise}
+
+source("functions/analysis/get_classification_spicy.R")
+```
+
+```{r full pairwise classification}
+
+## Obtaining full pairwise data
+full_pairwise = cbind(
+  spicy_full$pairwiseAssoc %>% dplyr::bind_cols(), # Obtaining pairwise associations
+  cellExp$imagePheno %>% dplyr::bind_rows()        # Obtaining response and patient ID
+) %>% dplyr::right_join(
+  readxl::read_xlsx("NewData/clinical.xlsx") %>% select(subject = `Pathology Reference No`, treatment = Treatment),
+  by = "subject"
+) # Obtaining treatment (monotherapy vs combination therapy) from clinical
+
+full_pairwise_comb = full_pairwise %>% filter(treatment == "combination anti-PD-1 + anti-CTLA-4")
+full_pairwise_mono = full_pairwise %>% filter(treatment == "anti-PD-1 monotherapy")
+
+## Combination classification
+invisible(capture.output(
+  full_pairwise_comb_classification <- get_classification_spicy(no_folds = 5, no_repeats = 20,
+                                                                treatment = "combination", 
+                                                                combdata = full_pairwise_comb, 
+                                                                monodata = full_pairwise_mono)
+))
+
+## Monotherapy classification
+invisible(capture.output(
+  full_pairwise_mono_classification <- get_classification_spicy(no_folds = 5, no_repeats = 20,
+                                                                treatment = "monotherapy", 
+                                                                combdata = full_pairwise_comb, 
+                                                                monodata = full_pairwise_mono)
+))
+
+save(full_pairwise_comb_classification, file = "rdata/full_pairwise_comb_classification.Rdata")
+save(full_pairwise_mono_classification, file = "rdata/full_pairwise_mono_classification.Rdata")
+```
+
+
+```{r core pairwise classification}
+
+## Obtaining core pairwise data
+core_pairwise = cbind(
+  spicy_core$pairwiseAssoc %>% dplyr::bind_cols(), # Obtaining pairwise associations
+  cellExp_core$imagePheno %>% dplyr::bind_rows()   # Obtaining response and patient ID
+) %>% dplyr::right_join(
+  readxl::read_xlsx("NewData/clinical.xlsx") %>% select(subject = `Pathology Reference No`, treatment = Treatment),
+  by = "subject"
+) # Obtaining treatment (monotherapy vs combination therapy) from clinical
+
+core_pairwise_comb = core_pairwise %>% filter(treatment == "combination anti-PD-1 + anti-CTLA-4")
+core_pairwise_mono = core_pairwise %>% filter(treatment == "anti-PD-1 monotherapy")
+
+## Combination classification
+invisible(capture.output(
+  core_pairwise_comb_classification <- get_classification_spicy(no_folds = 5, no_repeats = 20,
+                                                                treatment = "combination", 
+                                                                combdata = core_pairwise_comb, 
+                                                                monodata = core_pairwise_mono)
+))
+
+## Monotherapy classification
+invisible(capture.output(
+  core_pairwise_mono_classification <- get_classification_spicy(no_folds = 5, no_repeats = 20,
+                                                                treatment = "monotherapy", 
+                                                                combdata = core_pairwise_comb, 
+                                                                monodata = core_pairwise_mono)
+))
+
+save(core_pairwise_comb_classification, file = "rdata/core_pairwise_comb_classification.Rdata")
+save(core_pairwise_mono_classification, file = "rdata/core_pairwise_mono_classification.Rdata")
+```
+
+```{r edge pairwise classification}
+
+## Obtaining edge pairwise data
+edge_pairwise = cbind(
+  spicy_edge$pairwiseAssoc %>% dplyr::bind_cols(), # Obtaining pairwise associations
+  cellExp_edge$imagePheno %>% dplyr::bind_rows()        # Obtaining response and patient ID
+) %>% dplyr::right_join(
+  readxl::read_xlsx("NewData/clinical.xlsx") %>% select(subject = `Pathology Reference No`, treatment = Treatment),
+  by = "subject"
+) # Obtaining treatment (monotherapy vs combination therapy) from clinical
+
+edge_pairwise_comb = edge_pairwise %>% filter(treatment == "combination anti-PD-1 + anti-CTLA-4")
+edge_pairwise_mono = edge_pairwise %>% filter(treatment == "anti-PD-1 monotherapy")
+
+## Combination classification
+invisible(capture.output(
+  edge_pairwise_comb_classification <- get_classification_spicy(no_folds = 5, no_repeats = 20,
+                                                                treatment = "combination", 
+                                                                combdata = edge_pairwise_comb, 
+                                                                monodata = edge_pairwise_mono)
+))
+
+## Monotherapy classification
+invisible(capture.output(
+  edge_pairwise_mono_classification <- get_classification_spicy(no_folds = 5, no_repeats = 20,
+                                                                treatment = "monotherapy", 
+                                                                combdata = edge_pairwise_comb, 
+                                                                monodata = edge_pairwise_mono)
+))
+
+save(edge_pairwise_comb_classification, file = "rdata/edge_pairwise_comb_classification.Rdata")
+save(edge_pairwise_mono_classification, file = "rdata/edge_pairwise_mono_classification.Rdata")
+```
+
+```{r margin pairwise classification}
+
+## Obtaining margin pairwise data
+margin_pairwise = cbind(
+  spicy_margin$pairwiseAssoc %>% dplyr::bind_cols(), # Obtaining pairwise associations
+  cellExp_margin$imagePheno %>% dplyr::bind_rows()        # Obtaining response and patient ID
+) %>% dplyr::right_join(
+  readxl::read_xlsx("NewData/clinical.xlsx") %>% select(subject = `Pathology Reference No`, treatment = Treatment),
+  by = "subject"
+) # Obtaining treatment (monotherapy vs combination therapy) from clinical
+
+margin_pairwise_comb = margin_pairwise %>% filter(treatment == "combination anti-PD-1 + anti-CTLA-4")
+margin_pairwise_mono = margin_pairwise %>% filter(treatment == "anti-PD-1 monotherapy")
+
+## Combination classification
+invisible(capture.output(
+  margin_pairwise_comb_classification <- get_classification_spicy(no_folds = 5, no_repeats = 20,
+                                                                treatment = "combination", 
+                                                                combdata = margin_pairwise_comb, 
+                                                                monodata = margin_pairwise_mono)
+))
+
+## Monotherapy classification
+invisible(capture.output(
+  margin_pairwise_mono_classification <- get_classification_spicy(no_folds = 5, no_repeats = 20,
+                                                                treatment = "monotherapy", 
+                                                                combdata = margin_pairwise_comb, 
+                                                                monodata = margin_pairwise_mono)
+))
+
+save(margin_pairwise_comb_classification, file = "rdata/margin_pairwise_comb_classification.Rdata")
+save(margin_pairwise_mono_classification, file = "rdata/margin_pairwise_mono_classification.Rdata")
+```
+
+```{r nonmelanoma pairwise classification}
+
+## Obtaining nonmelanoma pairwise data
+nonmelanoma_pairwise = cbind(
+  spicy_nonmelanoma$pairwiseAssoc %>% dplyr::bind_cols(), # Obtaining pairwise associations
+  cellExp_nonmelanoma$imagePheno %>% dplyr::bind_rows()        # Obtaining response and patient ID
+) %>% dplyr::right_join(
+  readxl::read_xlsx("NewData/clinical.xlsx") %>% select(subject = `Pathology Reference No`, treatment = Treatment),
+  by = "subject"
+) # Obtaining treatment (monotherapy vs combination therapy) from clinical
+
+nonmelanoma_pairwise_comb = nonmelanoma_pairwise %>% filter(treatment == "combination anti-PD-1 + anti-CTLA-4")
+nonmelanoma_pairwise_mono = nonmelanoma_pairwise %>% filter(treatment == "anti-PD-1 monotherapy")
+
+## Combination classification
+invisible(capture.output(
+  nonmelanoma_pairwise_comb_classification <- get_classification_spicy(no_folds = 5, no_repeats = 20,
+                                                                treatment = "combination", 
+                                                                combdata = nonmelanoma_pairwise_comb, 
+                                                                monodata = nonmelanoma_pairwise_mono)
+))
+
+## Monotherapy classification
+invisible(capture.output(
+  nonmelanoma_pairwise_mono_classification <- get_classification_spicy(no_folds = 5, no_repeats = 20,
+                                                                treatment = "monotherapy", 
+                                                                combdata = nonmelanoma_pairwise_comb, 
+                                                                monodata = nonmelanoma_pairwise_mono)
+))
+
+save(nonmelanoma_pairwise_comb_classification, file = "rdata/nonmelanoma_pairwise_comb_classification.Rdata")
+save(nonmelanoma_pairwise_mono_classification, file = "rdata/nonmelanoma_pairwise_mono_classification.Rdata")
+```
+
+```{r core DIST pairwise classification}
+
+## Obtaining core_dist pairwise data
+core_dist_pairwise = cbind(
+  spicy_core_dist$pairwiseAssoc %>% dplyr::bind_cols(), # Obtaining pairwise associations
+  cellExp_core_dist$imagePheno %>% dplyr::bind_rows()   # Obtaining response and patient ID
+) %>% dplyr::right_join(
+  readxl::read_xlsx("NewData/clinical.xlsx") %>% select(subject = `Pathology Reference No`, treatment = Treatment),
+  by = "subject"
+) # Obtaining treatment (monotherapy vs combination therapy) from clinical
+
+core_dist_pairwise_comb = core_dist_pairwise %>% filter(treatment == "combination anti-PD-1 + anti-CTLA-4")
+core_dist_pairwise_mono = core_dist_pairwise %>% filter(treatment == "anti-PD-1 monotherapy")
+
+## Combination classification
+invisible(capture.output(
+  core_dist_pairwise_comb_classification <- get_classification_spicy(no_folds = 5, no_repeats = 20,
+                                                                treatment = "combination", 
+                                                                combdata = core_dist_pairwise_comb, 
+                                                                monodata = core_dist_pairwise_mono)
+))
+
+## Monotherapy classification
+invisible(capture.output(
+  core_dist_pairwise_mono_classification <- get_classification_spicy(no_folds = 5, no_repeats = 20,
+                                                                treatment = "monotherapy", 
+                                                                combdata = core_dist_pairwise_comb, 
+                                                                monodata = core_dist_pairwise_mono)
+))
+
+save(core_dist_pairwise_comb_classification, file = "rdata/core_dist_pairwise_comb_classification.Rdata")
+save(core_dist_pairwise_mono_classification, file = "rdata/core_dist_pairwise_mono_classification.Rdata")
+```
+
+```{r edge DIST pairwise classification}
+
+## Obtaining edge_dist pairwise data
+edge_dist_pairwise = cbind(
+  spicy_edge_dist$pairwiseAssoc %>% dplyr::bind_cols(), # Obtaining pairwise associations
+  cellExp_edge_dist$imagePheno %>% dplyr::bind_rows()        # Obtaining response and patient ID
+) %>% dplyr::right_join(
+  readxl::read_xlsx("NewData/clinical.xlsx") %>% select(subject = `Pathology Reference No`, treatment = Treatment),
+  by = "subject"
+) # Obtaining treatment (monotherapy vs combination therapy) from clinical
+
+edge_dist_pairwise_comb = edge_dist_pairwise %>% filter(treatment == "combination anti-PD-1 + anti-CTLA-4")
+edge_dist_pairwise_mono = edge_dist_pairwise %>% filter(treatment == "anti-PD-1 monotherapy")
+
+## Combination classification
+invisible(capture.output(
+  edge_dist_pairwise_comb_classification <- get_classification_spicy(no_folds = 5, no_repeats = 20,
+                                                                treatment = "combination", 
+                                                                combdata = edge_dist_pairwise_comb, 
+                                                                monodata = edge_dist_pairwise_mono)
+))
+
+## Monotherapy classification
+invisible(capture.output(
+  edge_dist_pairwise_mono_classification <- get_classification_spicy(no_folds = 5, no_repeats = 20,
+                                                                treatment = "monotherapy", 
+                                                                combdata = edge_dist_pairwise_comb, 
+                                                                monodata = edge_dist_pairwise_mono)
+))
+
+save(edge_dist_pairwise_comb_classification, file = "rdata/edge_dist_pairwise_comb_classification.Rdata")
+save(edge_dist_pairwise_mono_classification, file = "rdata/edge_dist_pairwise_mono_classification.Rdata")
+```
+
+```{r margin DIST pairwise classification}
+
+## Obtaining margin_dist pairwise data
+margin_dist_pairwise = cbind(
+  spicy_margin_dist$pairwiseAssoc %>% dplyr::bind_cols(), # Obtaining pairwise associations
+  cellExp_margin_dist$imagePheno %>% dplyr::bind_rows()        # Obtaining response and patient ID
+) %>% dplyr::right_join(
+  readxl::read_xlsx("NewData/clinical.xlsx") %>% select(subject = `Pathology Reference No`, treatment = Treatment),
+  by = "subject"
+) # Obtaining treatment (monotherapy vs combination therapy) from clinical
+
+margin_dist_pairwise_comb = margin_dist_pairwise %>% filter(treatment == "combination anti-PD-1 + anti-CTLA-4")
+margin_dist_pairwise_mono = margin_dist_pairwise %>% filter(treatment == "anti-PD-1 monotherapy")
+
+## Combination classification
+invisible(capture.output(
+  margin_dist_pairwise_comb_classification <- get_classification_spicy(no_folds = 5, no_repeats = 20,
+                                                                treatment = "combination", 
+                                                                combdata = margin_dist_pairwise_comb, 
+                                                                monodata = margin_dist_pairwise_mono)
+))
+
+## Monotherapy classification
+invisible(capture.output(
+  margin_dist_pairwise_mono_classification <- get_classification_spicy(no_folds = 5, no_repeats = 20,
+                                                                treatment = "monotherapy", 
+                                                                combdata = margin_dist_pairwise_comb, 
+                                                                monodata = margin_dist_pairwise_mono)
+))
+
+save(margin_dist_pairwise_comb_classification, file = "rdata/margin_dist_pairwise_comb_classification.Rdata")
+save(margin_dist_pairwise_mono_classification, file = "rdata/margin_dist_pairwise_mono_classification.Rdata")
+```
+
+```{r nonmelanoma DIST pairwise classification}
+
+## Obtaining nonmelanoma_dist pairwise data
+nonmelanoma_dist_pairwise = cbind(
+  spicy_nonmelanoma_dist$pairwiseAssoc %>% dplyr::bind_cols(), # Obtaining pairwise associations
+  cellExp_nonmelanoma_dist$imagePheno %>% dplyr::bind_rows()        # Obtaining response and patient ID
+) %>% dplyr::right_join(
+  readxl::read_xlsx("NewData/clinical.xlsx") %>% select(subject = `Pathology Reference No`, treatment = Treatment),
+  by = "subject"
+) # Obtaining treatment (monotherapy vs combination therapy) from clinical
+
+nonmelanoma_dist_pairwise_comb = nonmelanoma_dist_pairwise %>% filter(treatment == "combination anti-PD-1 + anti-CTLA-4")
+nonmelanoma_dist_pairwise_mono = nonmelanoma_dist_pairwise %>% filter(treatment == "anti-PD-1 monotherapy")
+
+## Combination classification
+invisible(capture.output(
+  nonmelanoma_dist_pairwise_comb_classification <- get_classification_spicy(no_folds = 5, no_repeats = 20,
+                                                                treatment = "combination", 
+                                                                combdata = nonmelanoma_dist_pairwise_comb, 
+                                                                monodata = nonmelanoma_dist_pairwise_mono)
+))
+
+## Monotherapy classification
+invisible(capture.output(
+  nonmelanoma_dist_pairwise_mono_classification <- get_classification_spicy(no_folds = 5, no_repeats = 20,
+                                                                treatment = "monotherapy", 
+                                                                combdata = nonmelanoma_dist_pairwise_comb, 
+                                                                monodata = nonmelanoma_dist_pairwise_mono)
+))
+
+# save(nonmelanoma_dist_pairwise_comb_classification, file = "rdata/nonmelanoma_dist_pairwise_comb_classification.Rdata")
+# save(nonmelanoma_dist_pairwise_mono_classification, file = "rdata/nonmelanoma_dist_pairwise_mono_classification.Rdata")
+```
+
+```{r}
+
+p1 = full_pairwise_comb_classification[["training_balacc_p"]]
+
+p2 = core_pairwise_comb_classification[["training_balacc_p"]]
+p3 = core_dist_pairwise_comb_classification[["training_balacc_p"]]
+
+p4 = edge_pairwise_comb_classification[["training_balacc_p"]]
+p5 = edge_dist_pairwise_comb_classification[["training_balacc_p"]]
+
+p6 = margin_pairwise_comb_classification[["training_balacc_p"]]
+
+p7 = nonmelanoma_pairwise_comb_classification[["training_balacc_p"]]
+
+ptogether = ggpubr::ggarrange(p1, p2, p3, p4,
+                  p5, p6, p7, ncol = 4)
+
+
+full_pairwise_mono_classification[["training_balacc_p"]]
+
+core_pairwise_mono_classification[["training_balacc_p"]]
+core_dist_pairwise_mono_classification[["training_balacc_p"]]
+
+edge_pairwise_mono_classification[["training_balacc_p"]]
+edge_dist_pairwise_mono_classification[["training_balacc_p"]]
+
+ptogether
+```
