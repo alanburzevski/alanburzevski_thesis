@@ -1,0 +1,1122 @@
+---
+title: "proportion_analysis"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+## Loading required packages
+library(tidyverse) # for a variety of things including %>%
+
+library(pheatmap) # for heatmap
+library(heatmaply) # for heatmap
+library(ggpubr) # for plotting
+
+library(Rtsne) # for t-SNE
+
+library(caret) # for fitting models
+# library(class) # for knn
+library(e1071) # for svm
+library(randomForest) # for randomforest
+library(janitor) # for cleaning names for randomforest
+library(xgboost) # for xgboost
+
+library(Hotelling) # for testing
+```
+
+
+# Preparing Data
+
+## Reading Data
+
+Note that the data is extremely large, so reading the data takes a long time. 
+
+```{r reading data, eval = FALSE}
+
+# batch1_2 = data.table::fread("NewData/batch3_4.csv")
+# batch3_4 = data.table::fread("NewData/batch3_4.csv")
+# batch5 = data.table::fread("NewData/batch5.csv")
+# batch6 = data.table::fread("NewData/batch6.csv")
+# batch7 = data.table::fread("NewData/batch7.csv")
+# batch8_9 = data.table::fread("NewData/batch8_9.csv")
+```
+
+## Cleaning Data
+
+Using a separate R script function.
+
+```{r cleaning data, eval = FALSE}
+
+# ## Loading function
+# source("functions/proportion_analysis_data_clean_fn.R")
+# 
+# ## Cleaning data
+# b12 = data_clean(batch1_2)
+# b34 = data_clean(batch3_4)
+# b5 = data_clean(batch5)
+# b6 = data_clean(batch6)
+# b7 = data_clean(batch7)
+# b89 = data_clean(batch8_9)
+```
+
+## Saving New Data
+
+```{r saving data, eval = FALSE}
+
+# ## Saving as RDS files
+# saveRDS(b12, file = "rdata/batch1_2.rds")
+# saveRDS(b34, file = "rdata/batch3_4.rds")
+# saveRDS(b5, file = "rdata/batch5.rds")
+# saveRDS(b6, file = "rdata/batch6.rds")
+# saveRDS(b7, file = "rdata/batch7.rds")
+# saveRDS(b89, file = "rdata/batch8_9.rds")
+```
+
+## Loading Data
+
+```{r}
+
+## Loading data
+b12 = readRDS("rdata/batch1_2.rds")
+b34 = readRDS("rdata/batch3_4.rds")
+b5 = readRDS("rdata/batch5.rds")
+b6 = readRDS("rdata/batch6.rds")
+b7 = readRDS("rdata/batch7.rds")
+b89 = readRDS("rdata/batch8_9.rds")
+
+```
+
+
+## Obtaining Barcodes
+
+These barcodes indicate what cell type markers are expressed, for example:
+
+- 00000000 = no cell markers at all
+- 00001000 = cd16+ non-macrophages (cd68-) 
+- 00000101 = all pd-l1/pd-l1 non-melanoma  --> if expressing multiple cell type markers, these types are separated by a "/"
+
+```{r obtaining barcodes}
+# 
+# celltype_cols = c("melanoma (sox10+)",
+#                   "cytotoxic t-cell (cd8+)",
+#                   "macrophage (cd68+)",
+#                   "cd16+ macrophages (cd68+)",
+#                   "cd16+ non-macrophages (cd68-)",
+#                   "all pd-l1",
+#                   "pd-l1 melanoma",
+#                   "pd-l1 non-melanoma")
+# 
+# ## Sourcing in get_barcode function
+# source("functions/get_barcode_fn.R")
+# 
+# 
+# ## Obtaining barcoded datasets
+# b12_barcode = b12 %>% 
+#   mutate(celltype = get_barcode(b12))
+# b12_barcode = b12_barcode %>% select(-celltype_cols)
+# 
+# b34_barcode = b34 %>% 
+#   mutate(celltype = get_barcode(b34))
+# b34_barcode = b34_barcode %>% select(-celltype_cols)
+# 
+# b5_barcode = b5 %>% 
+#   mutate(celltype = get_barcode(b5))
+# b5_barcode = b5_barcode %>% select(-celltype_cols)
+# 
+# b6_barcode = b6 %>% 
+#   mutate(celltype = get_barcode(b6))
+# b6_barcode = b6_barcode %>% select(-celltype_cols)
+# 
+# b7_barcode = b7 %>% 
+#   mutate(celltype = get_barcode(b7))
+# b7_barcode = b7_barcode %>% select(-celltype_cols)
+# 
+# b89_barcode = b89 %>% 
+#   mutate(celltype = get_barcode(b89))
+# b89_barcode = b89_barcode %>% select(-celltype_cols)
+#
+#
+## Saving as RDS files
+# saveRDS(b12_barcode, file = "rdata/b12_barcode.rds")
+# saveRDS(b34_barcode, file = "rdata/b34_barcode.rds")
+# saveRDS(b5_barcode, file = "rdata/b5_barcode.rds")
+# saveRDS(b6_barcode, file = "rdata/b6_barcode.rds")
+# saveRDS(b7_barcode, file = "rdata/b7_barcode.rds")
+# saveRDS(b89_barcode, file = "rdata/b89_barcode.rds")
+```
+
+## Obtaining Proportions
+
+```{r getting proportions of barcodes, eval = FALSE}
+
+# ## Sourcing in get_barcode_prop function
+# source("functions/get_barcode_prop_fn.R")
+# 
+# ## Obtaining barcode proportions
+# b12_barcode = readRDS("rdata/b12_barcode.rds")
+# b12_barcodeprop = get_barcode_prop(b12_barcode)
+# 
+# b34_barcode = readRDS("rdata/b34_barcode.rds")
+# b34_barcodeprop = get_barcode_prop(b34_barcode)
+# 
+# b5_barcode = readRDS("rdata/b5_barcode.rds")
+# b5_barcodeprop = get_barcode_prop(b5_barcode)
+# 
+# b6_barcode = readRDS("rdata/b6_barcode.rds")
+# b6_barcodeprop = get_barcode_prop(b6_barcode)
+# 
+# b7_barcode = readRDS("rdata/b7_barcode.rds")
+# b7_barcodeprop = get_barcode_prop(b7_barcode)
+# 
+# b89_barcode = readRDS("rdata/b89_barcode.rds")
+# b89_barcodeprop = get_barcode_prop(b89_barcode)
+# 
+# ## Combining batches
+# barcodeprop_dat = bind_rows(b12_barcodeprop,
+#                             b34_barcodeprop,
+#                             b5_barcodeprop,
+#                             b6_barcodeprop,
+#                             b7_barcodeprop,
+#                             b89_barcodeprop)
+# 
+# ## Obtaining and cleaning clinical data
+# clinical = readxl::read_xlsx("NewData/clinical.xlsx")
+# 
+# clinical_toexclude = clinical$`Comments/May want to exclude from analysis` %>% 
+#   replace_na("none") %>% 
+#   str_detect("Little melanoma|DAPI") # Removing all patients that have little melanoma or failed DAPI stain
+# 
+# clinical = clinical[!clinical_toexclude, ] %>% 
+#   select("imageid" = "Pathology Reference No",
+#          "response" = "Response",
+#          "treatment" = "Treatment")
+# 
+# ## Adding response from clinical data
+# barcodeprop_dat = clinical %>%
+#   inner_join(barcodeprop_dat, by = "imageid") # inner_join to contain all of the patients with both clinical and cellprop data
+# 
+# 
+# ## Recoding barcodes to something more meaningful
+# 
+# ## Sourcing in function to get barcodes
+# source("functions/get_barcodename_fn.R")
+# 
+# ## Obtaining barcode names
+# barcodename_vec = sapply(unique(barcodeprop_dat$celltype), get_barcodename) %>%
+#   setNames(unique(barcodeprop_dat$celltype), .)
+# 
+# levels(barcodeprop_dat$celltype) = names(barcodename_vec[match(levels(barcodeprop_dat$celltype), barcodename_vec)]) # Matching the current levels with barcodename_vec
+# # and obtaining corresponding description
+# 
+# 
+# # Changing to wide format
+# barcodeprop_dat = barcodeprop_dat %>%
+#   pivot_wider(id_cols = c(1, 2, 3, 7),
+#               names_from = "celltype",
+#               values_from = "prop")
+# 
+# ## Duplicated patient in batch 1&2 and batch 7 --> Tuba said to use batch 7
+# barcodeprop_dat = barcodeprop_dat %>%
+#   filter(imageid != "SP-15-016503" | (imageid == "SP-15-016503" & batch == "b7"))
+# 
+# ## Saving
+# saveRDS(barcodeprop_dat, file = "rdata/barcodeprop_dat.rds")
+```
+
+```{r loading barcodeprop data}
+
+## Loading barcodeprop data
+barcodeprop_dat = readRDS("rdata/barcodeprop_dat.rds")
+
+## Coercing response into a factor variable
+barcodeprop_dat$response = as.factor(barcodeprop_dat$response)
+```
+
+
+# Proportions Analysis
+
+Note that the patients are split into those with combination anti-PD-1 + anti-CTLA-4 therapy; and those with anti-PD-1 monotherapy. We will be performing subsequent analysis on each group individually.
+
+```{r splitting by treatment}
+
+# ## Combination
+# barcodeprop_comb = barcodeprop_dat %>% 
+#   filter(treatment == "combination anti-PD-1 + anti-CTLA-4") %>% 
+#   select(-treatment)
+# 
+# ## Monotherapy
+# barcodeprop_mono = barcodeprop_dat %>% 
+#   filter(treatment == "anti-PD-1 monotherapy") %>% 
+#   select(-treatment)
+# 
+# ## Changing response to factor
+# barcodeprop_comb$response = as.factor(barcodeprop_comb$response)
+# barcodeprop_mono$response = as.factor(barcodeprop_mono$response)
+# 
+# ## Saving
+# saveRDS(barcodeprop_comb, file = "rdata/barcodeprop_comb.rds")
+# saveRDS(barcodeprop_mono, file = "rdata/barcodeprop_mono.rds")
+# 
+## Loading barcodeprop data
+barcodeprop_comb = readRDS("rdata/barcodeprop_comb.rds")
+barcodeprop_mono = readRDS("rdata/barcodeprop_mono.rds")
+```
+
+## Proportion Heatmap {.tabset}
+
+### Combination therapy
+
+```{r combination heatmap, fig.height = 10, fig.width = 10}
+
+# Matrix
+
+
+comb_barcodeprop_mat =
+  barcodeprop_comb %>% 
+  select(-imageid, -response, -batch) %>% 
+  as.matrix() %>% 
+  t() %>% 
+  
+  # ## Sqrt transformation
+  # apply(2, sqrt)
+  
+  ## Changing column names
+  `colnames<-`(barcodeprop_comb$imageid)
+
+
+
+# Annotations
+
+
+## Column annotation: response and batch
+
+comb_anncol = data.frame("Response" = barcodeprop_comb$response,
+                         "Batch" = barcodeprop_comb$batch) %>% 
+  `rownames<-`(colnames(comb_barcodeprop_mat)) # Setting rownames to imageid (colnames of barcodeprop_mat)
+
+
+## Row annotation: melanoma
+
+comb_annrow = data.frame("Cell Type" = rep("Non-melanoma", nrow(comb_barcodeprop_mat))) %>%  # Populating with all Non-melanoma for now
+  `colnames<-`("Cell Type") %>%  # For nicer plotting
+  `rownames<-`(rownames(comb_barcodeprop_mat))  # Setting rownames to cell types (rownames of cellprop_mat)
+
+## Obtaining row indexes which are "melanoma" AND NOT "non-melanoma"
+melanoma_index = (str_detect(rownames(comb_annrow), "melanoma") & !str_detect(rownames(comb_annrow), "non-melanoma"))
+
+comb_annrow[melanoma_index, ] = "Melanoma" # Changing melanoma cells to melanoma classification
+
+
+
+# Creating heatmap
+
+
+comb_heat = ggheatmap(comb_barcodeprop_mat,
+                      scale = "row",
+                      dist_method = "euclidean",
+                      hclust_method = "complete",
+                      dendrogram = "column",
+                      main = "Combination Therapy Cell Proportions",
+                      col_side_colors = comb_anncol,
+                      row_side_colors = comb_annrow,
+                      showticklabels = c(FALSE, TRUE))
+
+comb_heat_interactive = heatmaply(comb_barcodeprop_mat,
+                                  scale = "row",
+                                  dist_method = "euclidean",
+                                  hclust_method = "complete",
+                                  dendrogram = "column",
+                                  main = "Combination Therapy Cell Proportions",
+                                  col_side_colors = comb_anncol,
+                                  row_side_colors = comb_annrow,
+                                  showticklabels = c(FALSE, TRUE))
+
+
+
+
+comb_heat
+comb_heat_interactive
+
+# ggsave("figures/combination_heatmap.jpg", plot = comb_heat, height = 10, width = 20)
+```
+
+### Monotherapy
+
+```{r monotherapy heatmap, fig.height = 10, fig.width = 10}
+
+# Matrix
+
+
+mono_barcodeprop_mat =
+  barcodeprop_mono %>% 
+  select(-imageid, -response, -batch) %>% 
+  as.matrix() %>% 
+  t() %>% 
+  
+  # ## Sqrt transformation
+  # apply(2, sqrt)
+  
+  ## Changing column names
+  `colnames<-`(barcodeprop_mono$imageid)
+
+
+
+# Annotations
+
+
+## Column annotation: response and batch
+
+mono_anncol = data.frame("Response" = barcodeprop_mono$response,
+                         "Batch" = barcodeprop_mono$batch) %>% 
+  `rownames<-`(colnames(mono_barcodeprop_mat)) # Setting rownames to imageid (colnames of barcodeprop_mat)
+
+
+## Row annotation: melanoma
+
+mono_annrow = data.frame("Cell Type" = rep("Non-melanoma", nrow(mono_barcodeprop_mat))) %>%  # Populating with all Non-melanoma for now
+  `colnames<-`("Cell Type") %>%  # For nicer plotting
+  `rownames<-`(rownames(mono_barcodeprop_mat))  # Setting rownames to cell types (rownames of cellprop_mat)
+
+## Obtaining row indexes which are "melanoma" AND NOT "non-melanoma"
+melanoma_index = (str_detect(rownames(mono_annrow), "melanoma") & !str_detect(rownames(mono_annrow), "non-melanoma"))
+
+mono_annrow[melanoma_index, ] = "Melanoma" # Changing melanoma cells to melanoma classification
+
+
+
+# Creating heatmap
+
+
+mono_heat = ggheatmap(mono_barcodeprop_mat,
+                      scale = "row",
+                      dist_method = "euclidean",
+                      hclust_method = "complete",
+                      dendrogram = "column",
+                      main = "Monotherapy Cell Proportions",
+                      col_side_colors = mono_anncol,
+                      row_side_colors = mono_annrow,
+                      showticklabels = c(FALSE, TRUE))
+
+mono_heat_interactive = heatmaply(mono_barcodeprop_mat,
+                                  scale = "row",
+                                  dist_method = "euclidean",
+                                  hclust_method = "complete",
+                                  dendrogram = "column",
+                                  main = "Monotherapy Cell Proportions",
+                                  col_side_colors = mono_anncol,
+                                  row_side_colors = mono_annrow,
+                                  showticklabels = c(FALSE, TRUE))
+
+
+
+
+mono_heat
+mono_heat_interactive
+
+# ggsave("figures/monotherapy_heatmap.jpg", plot = mono_heat, height = 10, width = 20)
+```
+
+## Proportion PCA {.tabset}
+
+### Combination therapy
+
+```{r combination pca}
+
+## PCA
+comb_pca = prcomp(t(comb_barcodeprop_mat), scale = TRUE)
+
+## Plot data
+comb_pca_df = tibble(
+  PC1 = comb_pca$x[, 1],
+  PC2 = comb_pca$x[, 2],
+  PC3 = comb_pca$x[, 3],
+  Response = barcodeprop_comb$response
+)
+
+## Plotting PCA
+comb_pca1 = comb_pca_df %>% 
+  ggplot() +
+  aes(x = PC1, y = PC2, colour = Response) +
+  geom_point() +
+  labs(title = "Combination PC1 ~ PC2") +
+  theme_classic() +
+  theme(plot.title = element_text(hjust = 0.5))
+
+comb_pca2 = comb_pca_df %>% 
+  ggplot() +
+  aes(x = PC1, y = PC3, colour = Response) +
+  geom_point() +
+  labs(title = "Combination PC1 ~ PC3") +
+  theme_classic() +
+  theme(plot.title = element_text(hjust = 0.5))
+
+comb_pca3 = comb_pca_df %>% 
+  ggplot() +
+  aes(x = PC2, y = PC3, colour = Response) +
+  geom_point() +
+  labs(title = "Combination PC2 ~ PC3") +
+  theme_classic() +
+  theme(plot.title = element_text(hjust = 0.5))
+
+ggpubr::ggarrange(comb_pca1, comb_pca2, comb_pca3,
+                  ncol = 3, common.legend = TRUE, legend = "bottom")
+```
+
+There isn't much separation in the PCA plots.
+
+### Monotherapy
+
+```{r monotherapy pca}
+
+## PCA
+mono_pca = prcomp(t(mono_barcodeprop_mat), scale = TRUE)
+
+## Plot data
+mono_pca_df = tibble(
+  PC1 = mono_pca$x[, 1],
+  PC2 = mono_pca$x[, 2],
+  PC3 = mono_pca$x[, 3],
+  Response = barcodeprop_mono$response
+)
+
+## Plotting PCA
+mono_pca1 = mono_pca_df %>% 
+  ggplot() +
+  aes(x = PC1, y = PC2, colour = Response) +
+  geom_point() +
+  labs(title = "Monotherapy PC1 ~ PC2") +
+  theme_classic() +
+  theme(plot.title = element_text(hjust = 0.5))
+
+mono_pca2 = mono_pca_df %>% 
+  ggplot() +
+  aes(x = PC1, y = PC3, colour = Response) +
+  geom_point() +
+  labs(title = "Monotherapy PC1 ~ PC3") +
+  theme_classic() +
+  theme(plot.title = element_text(hjust = 0.5))
+
+mono_pca3 = mono_pca_df %>% 
+  ggplot() +
+  aes(x = PC2, y = PC3, colour = Response) +
+  geom_point() +
+  labs(title = "Monotherapy PC2 ~ PC3") +
+  theme_classic() +
+  theme(plot.title = element_text(hjust = 0.5))
+
+ggpubr::ggarrange(mono_pca1, mono_pca2, mono_pca3,
+                  ncol = 3, common.legend = TRUE, legend = "bottom")
+```
+
+There isn't much separation in the PCA plots.
+
+## Cell type proportions $t$-SNE {.tabset}
+
+### Combination therapy
+
+```{r combination tsne, fig.height = 10, fig.width = 10}
+
+## Initialising list to store plots
+comb_tsne_list = list()
+
+## Setting random seed for reproducibility
+set.seed(2021)
+
+## For loop for different perplexity values
+for(perplexity in c(2, 5, 10)){
+  
+  ## Performing t-SNE
+  comb_tsne = t(comb_barcodeprop_mat) %>% 
+    Rtsne(perplexity = perplexity)
+  
+  ## Creating data for plotting
+  comb_tsne_plotdata = tibble(
+    `Dimension 1` = comb_tsne$Y[, 1],
+    `Dimension 2` = comb_tsne$Y[, 2],
+    `Response` = barcodeprop_comb$response
+  )
+  
+  ## Plotting
+  comb_tsne_list[[match(perplexity, c(2, 5, 10))]] = comb_tsne_plotdata %>% 
+    ggplot() +
+    aes(x = `Dimension 1`, y = `Dimension 2`, colour = `Response`) +
+    geom_point() +
+    ggtitle(paste("Combination Therapy t-SNE: Perplexity =", perplexity)) +
+    theme_classic() +
+    theme(plot.title = element_text(hjust = 0.5))
+  
+}
+
+gridExtra::grid.arrange(comb_tsne_list[[1]],
+                        comb_tsne_list[[2]],
+                        comb_tsne_list[[3]],
+                        ncol = 2)
+```
+
+There isn't much separation in the $t$-SNE plots either.
+
+### Monotherapy
+
+```{r monotherapy tsne, fig.height = 10, fig.width = 10}
+
+## Initialising list to store plots
+mono_tsne_list = list()
+
+## Setting random seed for reproducibility
+set.seed(2021)
+
+## For loop for different perplexity values
+for(perplexity in c(2, 5, 10)){
+  
+  ## Performing t-SNE
+  mono_tsne = t(mono_barcodeprop_mat) %>% 
+    Rtsne(perplexity = perplexity)
+  
+  ## Creating data for plotting
+  mono_tsne_plotdata = tibble(
+    `Dimension 1` = mono_tsne$Y[, 1],
+    `Dimension 2` = mono_tsne$Y[, 2],
+    `Response` = barcodeprop_mono$response
+  )
+  
+  ## Plotting
+  mono_tsne_list[[match(perplexity, c(2, 5, 10))]] = mono_tsne_plotdata %>% 
+    ggplot() +
+    aes(x = `Dimension 1`, y = `Dimension 2`, colour = `Response`) +
+    geom_point() +
+    ggtitle(paste("Monotherapy t-SNE: Perplexity =", perplexity)) +
+    theme_classic() +
+    theme(plot.title = element_text(hjust = 0.5))
+  
+}
+
+gridExtra::grid.arrange(mono_tsne_list[[1]],
+                        mono_tsne_list[[2]],
+                        mono_tsne_list[[3]],
+                        ncol = 2)
+```
+
+There isn't much separation in the $t$-SNE plots either.
+
+## Classification {.tabset}
+
+### Combination therapy
+
+```{r combination data balance}
+
+table(barcodeprop_comb$response)
+```
+
+The data is quite imbalanced.
+
+
+```{r combination training accuracy}
+
+## Initialising lists to store balanced accuracies
+glm_acc = glm_balacc = rf_acc = rf_balacc = svm_acc = svm_balacc = xgb_acc = xgb_balacc = list()
+
+set.seed(2021)
+
+for(repeats in 1:20){
+  
+  ## Defining folds to use
+  cvIndex = caret::createFolds(barcodeprop_comb$response, k = 10, returnTrain = TRUE)
+  
+  ## Initialising list of confusion matrices
+  glm_conmat = rf_conmat = svm_conmat = xgb_conmat = list()
+  
+  for(fold in 1:5){
+    
+    ## Training data
+    train_dat = barcodeprop_comb %>% .[cvIndex[[fold]], ] %>% select(-imageid, -batch)
+    train_x = train_dat %>% select(-response)
+    train_y = train_dat %>% pull(response)
+    
+    ## Testing data
+    test_dat = barcodeprop_comb %>% .[-cvIndex[[fold]], ] %>% select(-imageid, -batch)
+    test_x = test_dat %>% select(-response)
+    test_y = test_dat %>% pull(response) 
+    
+    
+    
+    ## Fitting models
+    glm_model = glm(response ~ ., 
+                    data = train_dat, 
+                    family = binomial(link = "logit"))
+    
+    rf_model = randomForest::randomForest(response ~ .,
+                                          data = janitor::clean_names(train_dat)) # Need to clean names for randomforest to work
+    
+    svm_model = svm(train_x, train_y)
+    
+    xgb_model = xgboost(data = unlist(train_x) %>% matrix(nrow = nrow(train_x)),
+                        label = as.numeric(train_y) - 1, # xgb needs label to be numeric 0 < y < 1
+                        max_depth = 2, eta = 1, nthread = 1, nrounds = 2, objective = "binary:logistic")
+    
+    
+    ## Predictions on test data
+    glm_pred = predict(glm_model, test_x, type = "response") %>% 
+      {ifelse(. > 0.5, "Responder", "Non-responder")} %>%  # Cutoff at probability =  0.5
+      as.factor()
+    
+    rf_pred = predict(rf_model, janitor::clean_names(test_x), type = "response")
+    
+    svm_pred = predict(svm_model, test_x)
+    
+    xgb_pred = predict(xgb_model, unlist(test_x) %>% matrix(nrow = nrow(test_x))) %>% 
+      {ifelse(. > 0.5, "Responder", "Non-responder")} %>%  # Cutoff at probability =  0.5
+      as.factor()
+    
+    
+    ## Confusion matrices
+    glm_conmat[[fold]] = caret::confusionMatrix(data = glm_pred, 
+                                                reference = test_y)
+    
+    rf_conmat[[fold]] = caret::confusionMatrix(data = rf_pred,
+                                               reference = test_y)
+    
+    svm_conmat[[fold]] = caret::confusionMatrix(data = svm_pred,
+                                                reference = test_y)
+    
+    xgb_conmat[[fold]] = caret::confusionMatrix(data = xgb_pred,
+                                                reference = test_y)
+    
+    cat(paste("Completed: fold", fold))
+  }
+  
+  
+  ## Accuracies
+  glm_acc[[repeats]] = sapply(glm_conmat, function(x) x$overall[["Accuracy"]]) %>% mean()
+  rf_acc[[repeats]] = sapply(rf_conmat, function(x) x$overall[["Accuracy"]]) %>% mean()
+  svm_acc[[repeats]] = sapply(svm_conmat, function(x) x$overall[["Accuracy"]]) %>% mean()
+  xgb_acc[[repeats]] = sapply(xgb_conmat, function(x) x$overall[["Accuracy"]]) %>% mean()
+  
+  ## Balanced accuracies
+  glm_balacc[[repeats]] = sapply(glm_conmat, function(x) x$byClass[["Balanced Accuracy"]]) %>% mean()
+  rf_balacc[[repeats]] = sapply(rf_conmat, function(x) x$byClass[["Balanced Accuracy"]]) %>% mean()
+  svm_balacc[[repeats]] = sapply(svm_conmat, function(x) x$byClass[["Balanced Accuracy"]]) %>% mean()
+  xgb_balacc[[repeats]] = sapply(xgb_conmat, function(x) x$byClass[["Balanced Accuracy"]]) %>% mean()
+  
+  cat(paste("Completed: repeat", repeats))
+}
+```
+
+```{r combination plotting training accuracies}
+
+# Plotting
+
+
+
+## Accuracy
+
+
+## Getting data into appropriate form
+comb_plot_data_acc = unlist(glm_acc) %>% 
+  cbind(unlist(rf_acc),
+        unlist(svm_acc),
+        unlist(xgb_acc)) %>% 
+  `colnames<-`(c("glm", "rf", "svm", "xgb")) %>% 
+  as.data.frame() %>% 
+  pivot_longer(cols = 1:4, names_to = "method", values_to = "value")
+
+## Boxplot accuracies
+comb_training_acc_p = comb_plot_data_acc %>% 
+  ggplot() +
+  aes(x = method, y = value, colour = method) +
+  labs(x = "", y = "Accuracy",
+       title = "Combination Therapy: Model Accuracy on Training Data",
+       subtitle = "5-fold repeated CV; n = 20, k = 5\n60 responders & 31 non-responders") +
+  scale_x_discrete(labels = c("Logistic Regression", "RandomForest", "SVM", "XGBoost")) +
+  geom_boxplot() +
+  geom_jitter(width = 0.2, size = 0.2) +
+  geom_hline(yintercept = 0.5, linetype = "dashed") +
+  theme_classic() +
+  theme(legend.position = "none",
+        plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5))
+
+
+
+## Balanced Accuracy
+
+
+## Getting data into appropriate form
+comb_plot_data_balacc = unlist(glm_balacc) %>% 
+  cbind(unlist(rf_balacc),
+        unlist(svm_balacc),
+        unlist(xgb_balacc)) %>% 
+  `colnames<-`(c("glm", "rf", "svm", "xgb")) %>% 
+  as.data.frame() %>% 
+  pivot_longer(cols = 1:4, names_to = "method", values_to = "value")
+
+## Boxplot balanced accuracies
+comb_training_balacc_p = comb_plot_data_balacc %>% 
+  ggplot() +
+  aes(x = method, y = value, colour = method) +
+  labs(x = "", y = "Accuracy",
+       title = "Combination Therapy: Model Balanced Accuracy on Training Data",
+       subtitle = "5-fold repeated CV; n = 20, k = 5\n60 responders & 31 non-responders") +
+  scale_x_discrete(labels = c("Logistic Regression", "RandomForest", "SVM", "XGBoost")) +
+  geom_boxplot() +
+  geom_jitter(width = 0.2, size = 0.2) +
+  geom_hline(yintercept = 0.5, linetype = "dashed") +
+  theme_classic() +
+  theme(legend.position = "none",
+        plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5))
+
+comb_training_acc_p
+comb_training_balacc_p
+
+# ggsave("figures/combination_classification.jpg", plot = comb_training_balacc_p, height = 7, width = 10)
+```
+
+
+### Monotherapy
+
+```{r monotherapy data balance}
+
+table(barcodeprop_mono$response)
+```
+
+The data is completely balanced.
+
+
+```{r monotherapy training accuracy}
+
+## Initialising lists to store balanced accuracies
+glm_acc = glm_balacc = rf_acc = rf_balacc = svm_acc = svm_balacc = xgb_acc = xgb_balacc = list()
+
+set.seed(2021)
+
+for(repeats in 1:20){
+  
+  ## Defining folds to use
+  cvIndex = caret::createFolds(barcodeprop_mono$response, k = 10, returnTrain = TRUE)
+  
+  ## Initialising list of confusion matrices
+  glm_conmat = rf_conmat = svm_conmat = xgb_conmat = list()
+  
+  for(fold in 1:5){
+    
+    ## Training data
+    train_dat = barcodeprop_mono %>% .[cvIndex[[fold]], ] %>% select(-imageid, -batch)
+    train_x = train_dat %>% select(-response)
+    train_y = train_dat %>% pull(response)
+    
+    ## Testing data
+    test_dat = barcodeprop_mono %>% .[-cvIndex[[fold]], ] %>% select(-imageid, -batch)
+    test_x = test_dat %>% select(-response)
+    test_y = test_dat %>% pull(response) 
+    
+    
+    
+    ## Fitting models
+    glm_model = glm(response ~ ., 
+                    data = train_dat, 
+                    family = binomial(link = "logit"))
+    
+    rf_model = randomForest::randomForest(response ~ .,
+                                          data = janitor::clean_names(train_dat)) # Need to clean names for randomforest to work
+    
+    svm_model = svm(train_x, train_y)
+    
+    xgb_model = xgboost(data = unlist(train_x) %>% matrix(nrow = nrow(train_x)),
+                        label = as.numeric(train_y) - 1, # xgb needs label to be numeric 0 < y < 1
+                        max_depth = 2, eta = 1, nthread = 1, nrounds = 2, objective = "binary:logistic")
+    
+    
+    ## Predictions on test data
+    glm_pred = predict(glm_model, test_x, type = "response") %>% 
+      {ifelse(. > 0.5, "Responder", "Non-responder")} %>%  # Cutoff at probability =  0.5
+      as.factor()
+    
+    rf_pred = predict(rf_model, janitor::clean_names(test_x), type = "response")
+    
+    svm_pred = predict(svm_model, test_x)
+    
+    xgb_pred = predict(xgb_model, unlist(test_x) %>% matrix(nrow = nrow(test_x))) %>% 
+      {ifelse(. > 0.5, "Responder", "Non-responder")} %>%  # Cutoff at probability =  0.5
+      as.factor()
+    
+    
+    ## Confusion matrices
+    glm_conmat[[fold]] = caret::confusionMatrix(data = glm_pred, 
+                                                reference = test_y)
+    
+    rf_conmat[[fold]] = caret::confusionMatrix(data = rf_pred,
+                                               reference = test_y)
+    
+    svm_conmat[[fold]] = caret::confusionMatrix(data = svm_pred,
+                                                reference = test_y)
+    
+    xgb_conmat[[fold]] = caret::confusionMatrix(data = xgb_pred,
+                                                reference = test_y)
+    
+    cat(paste("Completed: fold", fold))
+  }
+  
+  
+  ## Accuracies
+  glm_acc[[repeats]] = sapply(glm_conmat, function(x) x$overall[["Accuracy"]]) %>% mean()
+  rf_acc[[repeats]] = sapply(rf_conmat, function(x) x$overall[["Accuracy"]]) %>% mean()
+  svm_acc[[repeats]] = sapply(svm_conmat, function(x) x$overall[["Accuracy"]]) %>% mean()
+  xgb_acc[[repeats]] = sapply(xgb_conmat, function(x) x$overall[["Accuracy"]]) %>% mean()
+  
+  ## Balanced accuracies
+  glm_balacc[[repeats]] = sapply(glm_conmat, function(x) x$byClass[["Balanced Accuracy"]]) %>% mean()
+  rf_balacc[[repeats]] = sapply(rf_conmat, function(x) x$byClass[["Balanced Accuracy"]]) %>% mean()
+  svm_balacc[[repeats]] = sapply(svm_conmat, function(x) x$byClass[["Balanced Accuracy"]]) %>% mean()
+  xgb_balacc[[repeats]] = sapply(xgb_conmat, function(x) x$byClass[["Balanced Accuracy"]]) %>% mean()
+  
+  cat(paste("Completed: repeat", repeats))
+}
+```
+
+```{r monotherapy plotting training accuracies}
+
+# Plotting
+
+
+
+## Accuracy
+
+
+## Getting data into appropriate form
+mono_plot_data_acc = unlist(glm_acc) %>% 
+  cbind(unlist(rf_acc),
+        unlist(svm_acc),
+        unlist(xgb_acc)) %>% 
+  `colnames<-`(c("glm", "rf", "svm", "xgb")) %>% 
+  as.data.frame() %>% 
+  pivot_longer(cols = 1:4, names_to = "method", values_to = "value")
+
+## Boxplot accuracies
+mono_training_acc_p = mono_plot_data_acc %>% 
+  ggplot() +
+  aes(x = method, y = value, colour = method) +
+  labs(x = "", y = "Accuracy",
+       title = "Monotherapy: Model Accuracy on Training Data",
+       subtitle = "5-fold repeated CV; n = 20, k = 5\n53 responders & 53 non-responders") +
+  scale_x_discrete(labels = c("Logistic Regression", "RandomForest", "SVM", "XGBoost")) +
+  geom_boxplot() +
+  geom_jitter(width = 0.2, size = 0.2) +
+  geom_hline(yintercept = 0.5, linetype = "dashed") +
+  theme_classic() +
+  theme(legend.position = "none",
+        plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5))
+
+
+
+## Balanced Accuracy --> not needed but included for completeness
+
+
+## Getting data into appropriate form
+mono_plot_data_balacc = unlist(glm_balacc) %>% 
+  cbind(unlist(rf_balacc),
+        unlist(svm_balacc),
+        unlist(xgb_balacc)) %>% 
+  `colnames<-`(c("glm", "rf", "svm", "xgb")) %>% 
+  as.data.frame() %>% 
+  pivot_longer(cols = 1:4, names_to = "method", values_to = "value")
+
+## Boxplot balanced accuracies
+mono_training_balacc_p = mono_plot_data_balacc %>% 
+  ggplot() +
+  aes(x = method, y = value, colour = method) +
+  labs(x = "", y = "Accuracy",
+       title = "Monotherapy: Model Balanced Accuracy on Training Data",
+       subtitle = "5-fold repeated CV; n = 20, k = 5\n53 responders & 53 non-responders") +
+  scale_x_discrete(labels = c("Logistic Regression", "RandomForest", "SVM", "XGBoost")) +
+  geom_boxplot() +
+  geom_jitter(width = 0.2, size = 0.2) +
+  geom_hline(yintercept = 0.5, linetype = "dashed") +
+  theme_classic() +
+  theme(legend.position = "none",
+        plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5))
+
+mono_training_acc_p
+mono_training_balacc_p
+
+# ggsave("figures/monotherapy_classification.jpg", plot = mono_training_acc_p, height = 7, width = 10)
+```
+
+
+## Testing {.tabset}
+
+Using a two-sample Hotelling's $t^2$ test with permutation (non-normally distributed data) and using Shaefer and Strimmer's James-Stein shrinkage estimator to calculate hte sample covariance matrices.
+
+### Combination
+
+```{r combination hotellings 2-sample permutation test}
+
+# ## Setting seed for reproducibility
+# set.seed(2021)
+# 
+# ## Obtaining 
+# hotelling_comb = barcodeprop_comb %>% 
+#   select(-imageid, -batch)
+# 
+# comb_proptest = hotelling.test(
+#   .~response,
+#   data = hotelling_comb,
+#   shrinkage = TRUE,
+#   perm = TRUE,
+#   B = 10000
+# )
+# 
+# save(comb_proptest, file = "rdata/comb_multivariate.Rdata")
+load("rdata/comb_multivariate.Rdata")
+
+comb_multivar_p = ggplot(data.frame(x = comb_proptest$results)) +
+  aes(x = x) +
+  geom_histogram(colour = "black", fill = "grey") +
+  geom_vline(xintercept = comb_proptest$stats$statistic,
+             colour = "red") +
+  geom_text(mapping = aes(x = 40,
+                          y = 100),
+            label = paste("p =", comb_proptest$pval),
+            colour = "red") +
+  labs(x = expression(T^2),
+       y = "Count",
+       title = "Combination Therapy: Distribution of Permuted Test Statistics",
+       subtitle = "Covariance matrices estimated w/ James-Stein estimator\nn = 1000 permutations") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5))
+
+# ggsave("figures/combination_multivariatetest.jpg", plot = comb_multivar_p, height = 7, width = 10)
+```
+
+
+There was no significant difference between cell proportions in responders and non-responders (p = `r proptest$pval`).
+
+### Monotherapy
+
+```{r monotherapy hotellings 2-sample permutation test}
+
+# ## Setting seed for reproducibility
+# set.seed(2021)
+# 
+# ## Obtaining 
+# hotelling_mono = barcodeprop_mono %>% 
+#   select(-imageid, -batch)
+# 
+# mono_proptest = hotelling.test(
+#   .~response,
+#   data = hotelling_mono,
+#   shrinkage = TRUE,
+#   perm = TRUE,
+#   B = 10000
+# )
+# 
+# save(mono_proptest, file = "rdata/mono_multivariate.Rdata")
+load("rdata/mono_multivariate.Rdata")
+
+mono_multivar_p = ggplot(data.frame(x = mono_proptest$results)) +
+  aes(x = x) +
+  geom_histogram(colour = "black", fill = "grey") +
+  geom_vline(xintercept = mono_proptest$stats$statistic,
+             colour = "red") +
+  geom_text(mapping = aes(x = 40,
+                          y = 100),
+            label = paste("p =", mono_proptest$pval),
+            colour = "red") +
+  labs(x = expression(T^2),
+       y = "Count",
+       title = "Monotherapy: Distribution of Permuted Test Statistics",
+       subtitle = "Covariance matrices estimated w/ James-Stein estimator\nn = 1000 permutations") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5))
+
+# ggsave("figures/monotherapy_multivariatetest.jpg", plot = mono_multivar_p, height = 7, width = 10)
+```
+
+There was a significant difference between cell proportions in responders and non-responders on anti-PD-1 monotherapy (p = `r proptest$pval`).
+
+We can perform post-hoc univariate permutation tests to see which celltype in particular has an effect
+
+```{r mono univariate tests}
+
+## Setting seed for reproducibility
+set.seed(2021)
+
+## Defining number of permutations
+B = 1000
+
+## Initialising list to store values
+mono_perm_tstat = list()
+
+for(celltype in (barcodeprop_mono %>% select(-batch, -response, -imageid) %>% colnames())){
+  
+  permuted_dat = barcodeprop_mono
+  t_null = vector("numeric", B)
+  t_formula = as.formula(paste0("`", celltype, "` ", "~ response"))
+  
+  ## Obtaining true test statistic
+  tt = t.test(t_formula, data = barcodeprop_mono)$statistic
+  
+  ## Obtaining permuted test statistics
+  for(i in 1:B){
+    permuted_dat$response = sample(barcodeprop_mono$response) #this is the permutation
+    t_null[i] = t.test(t_formula, data = permuted_dat)$statistic
+  }
+  
+  pval = mean(abs(t_null) >= abs(tt))
+  
+  mono_perm_tstat[[celltype]] = list(tt = tt, t_null = t_null, pval = pval)
+  
+}
+
+mono_sig = mono_perm_tstat %>% sapply(function(x) x$pval) %>% sort() %>% 
+  `*`(barcodeprop_mono %>% select(-batch, -response, -imageid) %>% colnames() %>% length()) %>%  # Bonferroni correction
+  .[{which(. < 0.05)}]
+mono_sig
+
+# mono_univar1_hist_p = mono_perm_tstat[[names(mono_sig)[1]]][["t_null"]] %>% 
+#   as.data.frame() %>% `colnames<-`(names(mono_sig)[1]) %>% 
+#   ggplot() +
+#   aes_string(x = paste0("`", names(mono_sig)[1], "`")) +
+#   geom_histogram(colour = "black", fill = "grey", binwidth = 0.5) +
+#   geom_vline(xintercept = mono_perm_tstat[[names(mono_sig)[1]]][["tt"]],
+#              colour = "red") +
+#   geom_text(mapping = aes(x = 8,
+#                           y = 20),
+#             label = paste("p =", mono_perm_tstat[[names(mono_sig)[1]]][["pval"]]),
+#             colour = "red") +
+#   labs(x = expression(T^2),
+#        y = "Count",
+#        title = "Monotherapy: Distribution of Permuted Test Statistics",
+#        subtitle = paste("Comparing", names(mono_sig)[1], "proportions; Bonferroni adjusted pval")) +
+#   theme_bw() +
+#   theme(plot.title = element_text(hjust = 0.5),
+#         plot.subtitle = element_text(hjust = 0.5))
+
+mono_univar1_p = barcodeprop_mono %>% 
+  ggplot() +
+  aes(x = response, fill = response) +
+  aes_string(y = paste0("`", names(mono_sig)[1], "`")) +
+  geom_boxplot(alpha = 0.8) +
+  geom_jitter(width = 0.2, cex = 0.5, alpha = 0.8) +
+  labs(x = "", y = "Cell Proportion",
+       title = paste("Proportion of", names(mono_sig)[1], "cells"),
+       subtitle = "Monotherapy") +
+  coord_flip() +
+  theme_bw() +
+  theme(legend.position = "none",
+        plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5))
+
+# ggsave("figures/monotherapy_univariatetest_1.jpg", plot = mono_univar1_p, width = 10, height = 7)
+```
+
+
+
+
+
+
+
